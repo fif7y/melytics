@@ -1,0 +1,40 @@
+# VPS migration path: export the DB, `docker compose up -d`, repoint DNS.
+services:
+  app:
+    build:
+      context: ../api
+      dockerfile: ../deploy/Dockerfile
+    environment:
+      APP_ENV: production
+      DB_CONNECTION: mysql
+      DB_HOST: db
+      DB_DATABASE: melytics
+      DB_USERNAME: melytics
+      DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD}
+    depends_on:
+      - db
+    restart: unless-stopped
+
+  db:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: melytics
+      MYSQL_USER: melytics
+      MYSQL_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD}
+      MYSQL_RANDOM_ROOT_PASSWORD: '1'
+    volumes:
+      - dbdata:/var/lib/mysql
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2
+    ports: ['80:80', '443:443']
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ../dashboard/dist:/srv/dashboard:ro
+      - caddydata:/data
+    restart: unless-stopped
+
+volumes:
+  dbdata:
+  caddydata:

@@ -1,0 +1,86 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Hit;
+use App\Models\Site;
+use App\Services\Enrichment;
+use Illuminate\Http\Request;
+use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Cache;
+
+class IngestController extends Controller
+{
+    public function __invoke(Request $request, Enrichment $enrich): Response
+    {
+        $data = $request->validate([
+            'k' => 'required|string|max:24',
+            'u' => 'required|string|max:2048',
+            'r' => 'nullable|string|max:2048',
+            'w' => 'nullable|integer|min:0|max:20000',
+            'z' => 'nullable|string|max:64',
+            'e' => 'nullable|string|max:64',
+            'p' => 'nullable|array',
+        ]);
+
+        $siteId = Cache::remember(
+            'site:'.$data['k'],
+            300,
+            fn () => Site::where('key', $data['k'])->value('id') ?? 0
+        );
+        if (! $siteId) {
+            return response()->noContent(); // never leak which keys exist
+        }
+
+        $ua = $request->userAgent();
+        if ($enrich->isBot($ua)) {
+            return response()->noContent();
+        }
+
+        $url = parse_url($data['u']);
+        parse_str($url['query'] ?? '', $query);
+        $refHost = null;
+        if (! empty($data['r'])) {
+            $refHost = parse_url($data['r'], PHP_URL_HOST);
+            if ($refHost === ($url['host'] ?? null)) {
+                $refHost = null; // internal navigation is not a referral
+            }
+        }
+
+        $parsed = $enrich->parseUserAgent($ua);
+
+        Hit::create([
+            'site_id' => $siteId,
+            'visitor_hash' => $enrich->visitorHash($siteId, $request),
+            'path' => substr($url['path'] ?? '/', 0, 512),
+            'referrer_host' => $refHost ? substr($refHost, 0, 255) : null,
+            'utm_source' => isset($query['utm_source']) ? substr($query['utm_source'], 0, 255) : null,
+            'utm_medium' => isset($query['utm_medium']) ? substr($query['utm_medium'], 0, 255) : null,
+            'utm_campaign' => isset($query['utm_campaign']) ? substr($query['utm_campaign'], 0, 255) : null,
+            'country' => $enrich->country($request),
+            'device' => $parsed['device'],
+            'browser' => $parsed['browser'],
+            'os' => $parsed['os'],
+            'screen_w' => $data['w'] ?? null,
+            'event' => $data['e'] ?? null,
+            'event_props' => $data['p'] ?? null,
+        ]);
+
+        return response()->noContent();
+    }
+
+    /** <noscript> 1px gif fallback: GET /api/echo.gif?k=...&u=... */
+    public function pixel(Request $request, Enrichment $enrich): Response
+    {
+        $request->merge(['u' => $request->query('u', $request->header('Referer', '/'))]);
+        try {
+            $this->__invoke($request, $enrich);
+        } catch (\Throwable) {
+            // a broken pixel must never error the page
+        }
+
+        return response(base64_decode('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'), 200)
+            ->header('Content-Type', 'image/gif')
+            ->header('Cache-Control', 'no-store');
+    }
+}

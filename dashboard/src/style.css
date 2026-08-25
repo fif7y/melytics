@@ -1,0 +1,57 @@
+@import 'tailwindcss';
+
+/* Design tokens — achromatic chrome, one accent. Light first, dark selected. */
+:root {
+  color-scheme: light dark;
+  --bg: #fcfcfb;
+  --surface: #f4f4f1;
+  --ink: #0b0b0b;
+  --ink-2: #52514e;
+  --ink-3: #8a8984;
+  --accent: #2a78d6;
+  --accent-soft: rgba(42, 120, 214, 0.12);
+  --compare: #b9b8b1;
+  --up: #008300;
+  --down: #e34948;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 4px 16px rgba(0, 0, 0, 0.05);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #131312;
+    --surface: #1e1e1c;
+    --ink: #f4f4ef;
+    --ink-2: #c3c2b7;
+    --ink-3: #7d7c75;
+    --accent: #3987e5;
+    --accent-soft: rgba(57, 135, 229, 0.16);
+    --compare: #4a4a46;
+    --up: #35a55a;
+    --down: #e66767;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 16px rgba(0, 0, 0, 0.25);
+  }
+}
+
+html,
+body,
+#app {
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* De-box: cards separate by fill + soft shadow, never borders */
+.card {
+  background: var(--surface);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+}
+
+.u-legend {
+  display: none;
+}
