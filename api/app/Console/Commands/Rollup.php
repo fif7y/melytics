@@ -48,10 +48,14 @@ class Rollup extends Command
             ? ($periodCol === 'ts' ? "DATE_FORMAT(created_at, '%Y-%m-%d %H:00:00')" : 'DATE(created_at)')
             : $sqlitePeriodExpr;
 
-        DB::transaction(function () use ($siteId, $table, $periodCol, $periodExpr, $from) {
+        // The period column stores a date string for daily rows; comparing it
+        // against a full datetime silently skips them (string comparison).
+        $periodFrom = $periodCol === 'day' ? $from->toDateString() : $from->toDateTimeString();
+
+        DB::transaction(function () use ($siteId, $table, $periodCol, $periodExpr, $from, $periodFrom) {
             DB::table($table)
                 ->where('site_id', $siteId)
-                ->where($periodCol, '>=', $from)
+                ->where($periodCol, '>=', $periodFrom)
                 ->delete();
 
             foreach (self::DIMENSIONS as $dimension => $column) {
