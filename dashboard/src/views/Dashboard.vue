@@ -215,18 +215,20 @@ async function logout() {
 
 <template>
   <div class="mx-auto max-w-6xl px-5 py-6">
-    <header class="flex items-center gap-4 mb-8">
-      <h1 class="text-lg font-semibold tracking-tight">melytics</h1>
+    <header class="mb-8 flex flex-wrap items-center gap-x-3 gap-y-2">
+      <div class="flex items-baseline gap-3">
+        <h1 class="text-lg font-semibold tracking-tight">melytics</h1>
 
-      <select
-        v-if="sites.length > 1"
-        :value="siteId"
-        class="rounded-lg bg-[var(--surface)] px-3 py-1.5 text-sm outline-none"
-        @change="router.push(`/${($event.target as HTMLSelectElement).value}`)"
-      >
-        <option v-for="s in sites" :key="s.id" :value="s.id">{{ s.domain }}</option>
-      </select>
-      <span v-else-if="site" class="text-sm text-[var(--ink-2)]">{{ site.domain }}</span>
+        <select
+          v-if="sites.length > 1"
+          :value="siteId"
+          class="rounded-lg bg-[var(--surface)] px-3 py-1.5 text-sm outline-none"
+          @change="router.push(`/${($event.target as HTMLSelectElement).value}`)"
+        >
+          <option v-for="s in sites" :key="s.id" :value="s.id">{{ s.domain }}</option>
+        </select>
+        <span v-else-if="site" class="text-sm text-[var(--ink-3)]">{{ site.domain }}</span>
+      </div>
 
       <span
         v-if="filter"
@@ -236,21 +238,29 @@ async function logout() {
         <button class="leading-none hover:opacity-70" title="Clear filter" @click="filter = null">×</button>
       </span>
 
-      <div class="ml-auto flex items-center gap-1 rounded-lg bg-[var(--surface)] p-1">
-        <button
-          v-for="r in RANGES"
-          :key="r.days"
-          class="rounded-md px-3 py-1 text-sm"
-          :class="rangeDays === r.days ? 'bg-[var(--accent-soft)] text-[var(--accent)] font-medium' : 'text-[var(--ink-2)]'"
-          @click="rangeDays = r.days"
-        >
-          {{ r.label }}
-        </button>
-      </div>
+      <div class="ml-auto flex items-center gap-2">
+        <div class="flex items-center gap-1 rounded-lg bg-[var(--surface)] p-1">
+          <button
+            v-for="r in RANGES"
+            :key="r.days"
+            class="rounded-md px-3 py-1 text-sm"
+            :class="rangeDays === r.days ? 'bg-[var(--accent-soft)] text-[var(--accent)] font-medium' : 'text-[var(--ink-2)]'"
+            @click="rangeDays = r.days"
+          >
+            {{ r.label }}
+          </button>
+        </div>
 
-      <SharePanel v-if="siteId" :key="siteId" :site-id="siteId" />
-      <SettingsPanel :modules="MODULES" :hidden="hidden" :density="density" @toggle="toggleModule" @density="setDensity" />
-      <button class="text-sm text-[var(--ink-3)] hover:text-[var(--ink)]" @click="logout">Sign out</button>
+        <SharePanel v-if="siteId" :key="siteId" :site-id="siteId" />
+        <SettingsPanel
+          :modules="MODULES"
+          :hidden="hidden"
+          :density="density"
+          @toggle="toggleModule"
+          @density="setDensity"
+          @signout="logout"
+        />
+      </div>
     </header>
 
     <main v-if="stats" class="space-y-5" :class="{ compact: density === 'compact' }">

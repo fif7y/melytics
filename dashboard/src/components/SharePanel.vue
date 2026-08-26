@@ -41,9 +41,22 @@ onMounted(load)
 
 <template>
   <div class="relative">
-    <button class="text-sm text-[var(--ink-3)] hover:text-[var(--ink)]" @click="open = !open">Share</button>
+    <button
+      class="flex h-9 w-9 items-center justify-center rounded-lg text-[var(--ink-2)] hover:bg-[var(--surface)] hover:text-[var(--ink)]"
+      :class="{ 'bg-[var(--surface)] text-[var(--ink)]': open }"
+      title="Share"
+      aria-label="Share"
+      @click="open = !open"
+    >
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="18" cy="5" r="3" />
+        <circle cx="6" cy="12" r="3" />
+        <circle cx="18" cy="19" r="3" />
+        <path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4" />
+      </svg>
+    </button>
 
-    <div v-if="open && link" class="absolute right-0 top-8 z-10 w-80 card p-4 space-y-3">
+    <div v-if="open && link" class="absolute right-0 top-11 z-10 w-80 card p-4 space-y-3 shadow-lg">
       <label class="flex items-center gap-2 text-sm">
         <input
           type="checkbox"
