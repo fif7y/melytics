@@ -2,6 +2,13 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { Me, Site } from '../lib/api'
 import Toggle from './Toggle.vue'
+import { theme, setTheme, type Theme } from '../lib/theme'
+
+const THEMES: { key: Theme; label: string }[] = [
+  { key: 'system', label: 'System' },
+  { key: 'light', label: 'Light' },
+  { key: 'dark', label: 'Dark' },
+]
 
 const props = defineProps<{ site: Site | null; me: Me | null }>()
 const emit = defineEmits<{
@@ -87,6 +94,21 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey))
         </div>
 
         <div class="flex-1 space-y-6 overflow-y-auto px-5 pb-5">
+          <section>
+            <div class="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--ink-3)]">Theme</div>
+            <div class="flex gap-1 rounded-lg bg-[var(--bg)] p-1">
+              <button
+                v-for="t in THEMES"
+                :key="t.key"
+                class="flex-1 rounded-md px-2 py-1.5 text-sm"
+                :class="theme === t.key ? 'bg-[var(--accent-soft)] font-medium text-[var(--accent)]' : 'text-[var(--ink-2)]'"
+                @click="setTheme(t.key)"
+              >
+                {{ t.label }}
+              </button>
+            </div>
+          </section>
+
           <section v-if="site">
             <div class="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--ink-3)]">Notifications</div>
             <Toggle label="Weekly digest email" :on="site.digest_enabled" @change="(on) => emit('notify', 'digest_enabled', on)" />

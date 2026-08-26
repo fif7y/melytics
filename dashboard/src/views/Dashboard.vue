@@ -14,7 +14,7 @@ import LoyaltyCard from '../components/LoyaltyCard.vue'
 import AttributionCard from '../components/AttributionCard.vue'
 import TimeToConvertCard from '../components/TimeToConvertCard.vue'
 import SharePanel from '../components/SharePanel.vue'
-import { theme, toggleTheme, effectiveTheme } from '../lib/theme'
+import { theme } from '../lib/theme'
 import SettingsPanel from '../components/SettingsPanel.vue'
 import AccountPanel from '../components/AccountPanel.vue'
 import SetupWizard from '../components/SetupWizard.vue'
@@ -453,8 +453,10 @@ async function logout() {
 
 <template>
   <div class="mx-auto max-w-6xl px-5 py-6">
-    <header class="mb-8 flex flex-wrap items-center gap-x-3 gap-y-2">
-      <div class="flex items-baseline gap-3">
+    <!-- Three groups: identity/context left, range centered, config right -->
+    <header class="mb-8 grid items-center gap-x-3 gap-y-2 md:grid-cols-[1fr_auto_1fr]">
+      <div class="flex flex-wrap items-center gap-3">
+        <div class="flex items-baseline gap-3">
         <h1 class="text-lg font-semibold tracking-tight">melytics</h1>
 
         <select
@@ -466,62 +468,37 @@ async function logout() {
           <option v-for="s in sites" :key="s.id" :value="s.id">{{ s.domain }}</option>
         </select>
         <span v-else-if="site" class="text-sm text-[var(--ink-3)]">{{ site.domain }}</span>
-      </div>
-
-      <span
-        v-if="filter"
-        class="flex items-center gap-1.5 rounded-full bg-[var(--accent-soft)] px-3 py-1 text-sm font-medium text-[var(--accent)]"
-      >
-        <span class="max-w-56 truncate">{{ filterLabel }}</span>
-        <button class="leading-none hover:opacity-70" title="Clear filter" @click="filter = null">×</button>
-      </span>
-
-      <div class="ml-auto flex items-center gap-2">
-        <div class="flex items-center gap-1 rounded-lg bg-[var(--surface)] p-1">
-          <button
-            v-for="r in RANGES"
-            :key="r.days"
-            class="rounded-md px-3 py-1 text-sm"
-            :class="!customRange && rangeDays === r.days ? 'bg-[var(--accent-soft)] text-[var(--accent)] font-medium' : 'text-[var(--ink-2)]'"
-            @click="setPresetRange(r.days)"
-          >
-            {{ r.label }}
-          </button>
-          <button
-            class="rounded-md px-3 py-1 text-sm tabular-nums"
-            :class="customRange ? 'bg-[var(--accent-soft)] text-[var(--accent)] font-medium' : 'text-[var(--ink-2)]'"
-            @click="openRangePicker"
-          >
-            {{ customLabel }}
-          </button>
         </div>
 
-        <button
-          class="flex h-9 w-9 items-center justify-center rounded-lg text-[var(--ink-2)] hover:bg-[var(--surface)] hover:text-[var(--ink)]"
-          title="Setup assistant"
-          aria-label="Setup assistant"
-          @click="wizard?.show()"
+        <span
+          v-if="filter"
+          class="flex items-center gap-1.5 rounded-full bg-[var(--accent-soft)] px-3 py-1 text-sm font-medium text-[var(--accent)]"
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true">
-            <path d="M12 3 C12.8 8.2 15.8 11.2 21 12 C15.8 12.8 12.8 15.8 12 21 C11.2 15.8 8.2 12.8 3 12 C8.2 11.2 11.2 8.2 12 3 Z" />
-          </svg>
-        </button>
+          <span class="max-w-56 truncate">{{ filterLabel }}</span>
+          <button class="leading-none hover:opacity-70" title="Clear filter" @click="filter = null">×</button>
+        </span>
+      </div>
 
+      <div class="flex items-center gap-1 rounded-lg bg-[var(--surface)] p-1 justify-self-start md:justify-self-center">
         <button
-          class="flex h-9 w-9 items-center justify-center rounded-lg text-[var(--ink-2)] hover:bg-[var(--surface)] hover:text-[var(--ink)]"
-          :title="effectiveTheme() === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'"
-          :aria-label="effectiveTheme() === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'"
-          @click="toggleTheme()"
+          v-for="r in RANGES"
+          :key="r.days"
+          class="rounded-md px-3 py-1 text-sm"
+          :class="!customRange && rangeDays === r.days ? 'bg-[var(--accent-soft)] text-[var(--accent)] font-medium' : 'text-[var(--ink-2)]'"
+          @click="setPresetRange(r.days)"
         >
-          <svg v-if="effectiveTheme() === 'dark'" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="4" />
-            <path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
-          </svg>
-          <svg v-else width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-          </svg>
+          {{ r.label }}
         </button>
+        <button
+          class="rounded-md px-3 py-1 text-sm tabular-nums"
+          :class="customRange ? 'bg-[var(--accent-soft)] text-[var(--accent)] font-medium' : 'text-[var(--ink-2)]'"
+          @click="openRangePicker"
+        >
+          {{ customLabel }}
+        </button>
+      </div>
 
+      <div class="flex items-center gap-2 justify-self-end">
         <SharePanel v-if="siteId" :key="siteId" :site-id="siteId" />
         <SettingsPanel
           :modules="orderedModules"

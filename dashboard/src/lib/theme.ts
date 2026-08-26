@@ -25,6 +25,14 @@ export function effectiveTheme(): 'light' | 'dark' {
   return matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
 }
 
+export function setTheme(t: Theme) {
+  theme.value = t
+  try {
+    t === 'system' ? localStorage.removeItem(KEY) : localStorage.setItem(KEY, t)
+  } catch {}
+  applyTheme()
+}
+
 export function toggleTheme() {
   theme.value = effectiveTheme() === 'dark' ? 'light' : 'dark'
   try {
