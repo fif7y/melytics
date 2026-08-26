@@ -11,13 +11,21 @@ export interface GoalRow {
   rate: number
 }
 
-const props = defineProps<{ siteId: number; goals: GoalRow[] }>()
+const props = defineProps<{ siteId: number; goals: GoalRow[]; targets?: { pages: string[]; events: string[] } }>()
 const emit = defineEmits<{ changed: []; assist: [] }>()
 
 const adding = ref(false)
 const name = ref('')
 const target = ref('')
 const busy = ref(false)
+
+// Picking a real target auto-names the goal (still editable)
+function suggestName() {
+  if (name.value || !target.value) return
+  name.value = target.value.startsWith('/')
+    ? `Visited ${target.value}`
+    : target.value.charAt(0).toUpperCase() + target.value.slice(1)
+}
 
 async function add() {
   if (!name.value || !target.value) return
@@ -93,16 +101,23 @@ async function remove(id: number) {
       </button>
     </div>
 
+    <datalist id="goal-targets">
+      <option v-for="p in targets?.pages ?? []" :key="'p' + p" :value="p">page</option>
+      <option v-for="e in targets?.events ?? []" :key="'e' + e" :value="e">event</option>
+    </datalist>
+
     <form v-if="adding" class="flex gap-2 mb-4" @submit.prevent="add">
+      <input
+        v-model="target"
+        list="goal-targets"
+        placeholder="Pick a page or event, or type your own"
+        class="flex-1 rounded-lg px-3 py-1.5 text-sm bg-[var(--bg)] outline-none focus:ring-2 ring-[var(--accent)] placeholder:text-[var(--ink-3)]"
+        @change="suggestName"
+      />
       <input
         v-model="name"
         placeholder="Name"
-        class="w-28 rounded-lg px-3 py-1.5 text-sm bg-[var(--bg)] outline-none focus:ring-2 ring-[var(--accent)] placeholder:text-[var(--ink-3)]"
-      />
-      <input
-        v-model="target"
-        placeholder="event name, or /path (wildcards ok)"
-        class="flex-1 rounded-lg px-3 py-1.5 text-sm bg-[var(--bg)] outline-none focus:ring-2 ring-[var(--accent)] placeholder:text-[var(--ink-3)]"
+        class="w-36 rounded-lg px-3 py-1.5 text-sm bg-[var(--bg)] outline-none focus:ring-2 ring-[var(--accent)] placeholder:text-[var(--ink-3)]"
       />
       <button :disabled="busy" class="rounded-lg px-3 py-1.5 text-sm text-white bg-[var(--accent)] disabled:opacity-50">Save</button>
     </form>
@@ -122,7 +137,8 @@ async function remove(id: number) {
           />
           <input
             v-model="editTarget"
-            placeholder="event name, or /path (wildcards ok)"
+            list="goal-targets"
+            placeholder="Pick a page or event, or type your own"
             class="flex-1 rounded-lg px-3 py-1.5 text-sm bg-[var(--bg)] outline-none focus:ring-2 ring-[var(--accent)]"
           />
           <button :disabled="busy" class="rounded-lg px-3 py-1.5 text-sm text-white bg-[var(--accent)] disabled:opacity-50">Save</button>

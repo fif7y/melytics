@@ -103,6 +103,26 @@ class StatsController extends Controller
         return response()->json($this->stats->timeToConvert($site, $from, $to));
     }
 
+    /** Real targets for goal/funnel builders: the site's actual pages and custom events. */
+    public function targets(Request $request, Site $site): JsonResponse
+    {
+        $this->authorizeSite($request, $site);
+        $since = now()->subDays(90)->toDateString();
+        $rows = fn (string $dim) => DB::table('rollup_daily')
+            ->where('site_id', $site->id)
+            ->where('dimension', $dim)
+            ->where('day', '>=', $since)
+            ->groupBy('value')
+            ->orderByRaw('SUM(pageviews) DESC')
+            ->limit(50)
+            ->pluck('value');
+
+        return response()->json([
+            'pages' => $rows('page'),
+            'events' => $rows('event')->reject(fn ($e) => str_starts_with($e, '__'))->values(),
+        ]);
+    }
+
     public function live(Request $request, Site $site): JsonResponse
     {
         $this->authorizeSite($request, $site);

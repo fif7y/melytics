@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { api } from '../lib/api'
 
-const props = defineProps<{ siteId: number; hasGoals?: boolean }>()
+const props = defineProps<{ siteId: number; hasGoals?: boolean; targets?: { pages: string[]; events: string[] } }>()
 const emit = defineEmits<{ close: []; created: [] }>()
 
 const open = ref(false)
@@ -35,6 +35,14 @@ const GOAL_TEMPLATES: GoalTemplate[] = [
   { id: 'purchase', name: 'Purchase completed', desc: 'Fire it on your order-confirmation moment.', event: 'purchase', code: true },
 ]
 const picked = ref<Record<string, boolean>>({})
+
+// How many of the site's real pages a path pattern matches (slash-insensitive)
+function pageMatches(pattern: string): number {
+  const pages = props.targets?.pages ?? []
+  if (!pages.length || !pattern.startsWith('/')) return 0
+  const rx = new RegExp('^' + pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '/?$')
+  return pages.filter((p) => rx.test(p)).length
+}
 const patterns = ref<Record<string, string>>(Object.fromEntries(GOAL_TEMPLATES.map((t) => [t.id, t.path ?? t.event ?? ''])))
 const pickedCount = computed(() => Object.values(picked.value).filter(Boolean).length)
 
@@ -104,6 +112,9 @@ const STEPS = ['Welcome', 'Goals', 'Funnel', 'Create']
   <Teleport to="body">
     <Transition name="wiz">
       <div v-if="open" class="fixed inset-0 z-50 overflow-y-auto bg-[var(--bg)]" role="dialog" aria-label="Setup assistant" @keydown.esc="close">
+        <datalist id="wiz-pages">
+          <option v-for="p in props.targets?.pages ?? []" :key="p" :value="p" />
+        </datalist>
         <!-- top rail: quiet progress, one exit -->
         <div class="sticky top-0 z-10 flex items-center gap-4 bg-[var(--bg)] px-6 py-4">
           <span class="text-sm font-semibold tracking-tight">melytics</span>
@@ -193,9 +204,13 @@ const STEPS = ['Welcome', 'Goals', 'Funnel', 'Create']
                 <div v-if="picked[t.id]" class="mt-2.5" @click.stop>
                   <input
                     v-model="patterns[t.id]"
+                    :list="t.event ? undefined : 'wiz-pages'"
                     class="w-full rounded-lg bg-[var(--bg)] px-2.5 py-1.5 font-mono text-xs outline-none focus:ring-2 ring-[var(--accent)]"
                     :aria-label="`Target for ${t.name}`"
                   />
+                  <p v-if="!t.event && (targets?.pages.length ?? 0) > 0" class="mt-1.5 text-[11px]" :class="pageMatches(patterns[t.id]) ? 'text-[var(--up)]' : 'text-[var(--ink-3)]'">
+                    {{ pageMatches(patterns[t.id]) ? `Matches ${pageMatches(patterns[t.id])} of your pages` : 'No matching page yet — pick one from the list' }}
+                  </p>
                 </div>
                 <div v-else class="mt-2.5 inline-block rounded-md bg-[var(--bg)] px-2 py-1 font-mono text-[11px] text-[var(--ink-2)]">
                   {{ t.event ?? t.path }}
@@ -252,6 +267,7 @@ const STEPS = ['Welcome', 'Goals', 'Funnel', 'Create']
                 <span class="w-5 text-right text-xs tabular-nums text-[var(--ink-3)]">{{ i + 1 }}</span>
                 <input
                   v-model="funnelSteps[i]"
+                  list="wiz-pages"
                   class="flex-1 rounded-lg bg-[var(--bg)] px-3 py-2 font-mono text-xs outline-none focus:ring-2 ring-[var(--accent)]"
                   :aria-label="`Step ${i + 1} path`"
                 />

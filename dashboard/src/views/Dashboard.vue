@@ -274,6 +274,19 @@ onMounted(async () => {
 
 const me = ref<Me | null>(null)
 const wizard = ref<InstanceType<typeof SetupWizard> | null>(null)
+
+// Real pages/events for the goal & wizard builders — contextual suggestions
+const targets = ref<{ pages: string[]; events: string[] }>({ pages: [], events: [] })
+watch(
+  siteId,
+  async (id) => {
+    if (!id) return
+    try {
+      targets.value = await api<{ pages: string[]; events: string[] }>(`/sites/${id}/targets`)
+    } catch {}
+  },
+  { immediate: true }
+)
 const resent = ref(false)
 async function resendVerification() {
   await api('/auth/resend-verification', { method: 'POST' })
@@ -439,7 +452,7 @@ async function logout() {
       </div>
     </header>
 
-    <SetupWizard v-if="siteId" ref="wizard" :site-id="siteId" :has-goals="goals.length > 0" @created="load" />
+    <SetupWizard v-if="siteId" ref="wizard" :site-id="siteId" :has-goals="goals.length > 0" :targets="targets" @created="load" />
 
     <div
       v-if="me && !me.verified"
@@ -509,7 +522,7 @@ async function logout() {
       </section>
 
       <div v-if="show('goals') || show('funnels')" class="grid gap-5 lg:grid-cols-2">
-        <GoalsCard v-if="show('goals')" class="h-full" :site-id="siteId" :goals="goals" @changed="load" @assist="wizard?.show()" />
+        <GoalsCard v-if="show('goals')" class="h-full" :site-id="siteId" :goals="goals" :targets="targets" @changed="load" @assist="wizard?.show()" />
         <FunnelsCard v-if="show('funnels')" class="h-full" :site-id="siteId" :funnels="funnels" @changed="load" />
       </div>
 

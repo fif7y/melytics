@@ -32,6 +32,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/sites/{site}/stats', [StatsController::class, 'stats']);
     Route::get('/sites/{site}/breakdown', [StatsController::class, 'breakdown']);
     Route::get('/sites/{site}/live', [StatsController::class, 'live']);
+    Route::get('/sites/{site}/targets', [StatsController::class, 'targets']);
     Route::get('/sites/{site}/goals', [StatsController::class, 'goals']);
     Route::get('/sites/{site}/vitals', [StatsController::class, 'vitals']);
     Route::get('/sites/{site}/retention', [StatsController::class, 'retention']);
