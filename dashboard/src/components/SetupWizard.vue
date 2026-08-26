@@ -306,9 +306,23 @@ const STEPS = ['Welcome', 'Goals', 'Funnel', 'Create']
               </p>
               <div v-if="createdEvents.length" class="wiz-rise card mt-8 p-5" style="--d: 2">
                 <div class="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--ink-3)]">One last thing — event goals</div>
-                <p class="mb-3 text-sm text-[var(--ink-2)]">Fire these from your site at the right moment:</p>
-                <pre class="overflow-x-auto rounded-lg bg-[var(--bg)] p-3 font-mono text-xs leading-relaxed text-[var(--ink-2)]"><code v-for="e in createdEvents" :key="e">melytics.track('{{ e }}')
-</code></pre>
+                <p class="mb-4 text-sm leading-relaxed text-[var(--ink-2)]">
+                  The tracking snippet already gives every page a <code class="rounded bg-[var(--bg)] px-1 font-mono text-xs">melytics.track()</code>
+                  function. Your job is one line: call it at the exact moment the thing happens. Two ways to do it:
+                </p>
+
+                <p class="mb-1.5 text-xs font-medium text-[var(--ink-2)]">Simplest — right on the button or form in your HTML:</p>
+                <pre class="mb-4 overflow-x-auto rounded-lg bg-[var(--bg)] p-3 font-mono text-xs leading-relaxed text-[var(--ink-2)]"><code>&lt;form onsubmit="melytics.track('{{ createdEvents[0] }}')"&gt;
+&lt;button onclick="melytics.track('{{ createdEvents[0] }}')"&gt;</code></pre>
+
+                <p class="mb-1.5 text-xs font-medium text-[var(--ink-2)]">Better — in your JavaScript, after the action really succeeded:</p>
+                <pre class="overflow-x-auto rounded-lg bg-[var(--bg)] p-3 font-mono text-xs leading-relaxed text-[var(--ink-2)]"><code>// e.g. once your signup request comes back OK
+melytics.track('{{ createdEvents[0] }}')</code></pre>
+
+                <p v-if="createdEvents.length > 1" class="mt-4 text-xs text-[var(--ink-3)]">
+                  Same pattern for each of yours: {{ createdEvents.map((e) => `melytics.track('${e}')`).join(' · ') }}
+                </p>
+                <p class="mt-3 text-xs text-[var(--ink-3)]">The goal starts counting the first time the event fires — nothing else to configure.</p>
               </div>
               <button class="wiz-rise mt-10 rounded-xl bg-[var(--accent)] px-6 py-3 text-sm font-medium text-white transition-transform hover:scale-[1.02]" style="--d: 3" @click="close">
                 Back to the dashboard
