@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { api } from '../lib/api'
+import TargetPicker from './TargetPicker.vue'
 
 export interface GoalRow {
   id: number
@@ -101,19 +102,8 @@ async function remove(id: number) {
       </button>
     </div>
 
-    <datalist id="goal-targets">
-      <option v-for="p in targets?.pages ?? []" :key="'p' + p" :value="p">page</option>
-      <option v-for="e in targets?.events ?? []" :key="'e' + e" :value="e">event</option>
-    </datalist>
-
     <form v-if="adding" class="flex gap-2 mb-4" @submit.prevent="add">
-      <input
-        v-model="target"
-        list="goal-targets"
-        placeholder="Pick a page or event, or type your own"
-        class="flex-1 rounded-lg px-3 py-1.5 text-sm bg-[var(--bg)] outline-none focus:ring-2 ring-[var(--accent)] placeholder:text-[var(--ink-3)]"
-        @change="suggestName"
-      />
+      <TargetPicker v-model="target" :targets="targets" placeholder="Pick a page or event, or type your own" @picked="suggestName" />
       <input
         v-model="name"
         placeholder="Name"
@@ -135,12 +125,7 @@ async function remove(id: number) {
             placeholder="Name"
             class="w-28 rounded-lg px-3 py-1.5 text-sm bg-[var(--bg)] outline-none focus:ring-2 ring-[var(--accent)]"
           />
-          <input
-            v-model="editTarget"
-            list="goal-targets"
-            placeholder="Pick a page or event, or type your own"
-            class="flex-1 rounded-lg px-3 py-1.5 text-sm bg-[var(--bg)] outline-none focus:ring-2 ring-[var(--accent)]"
-          />
+          <TargetPicker v-model="editTarget" :targets="targets" placeholder="Pick a page or event, or type your own" />
           <button :disabled="busy" class="rounded-lg px-3 py-1.5 text-sm text-white bg-[var(--accent)] disabled:opacity-50">Save</button>
           <button type="button" class="rounded-lg px-2 py-1.5 text-sm text-[var(--ink-3)]" @click="editingId = null">Cancel</button>
         </form>
