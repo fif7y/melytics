@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import Toggle from './Toggle.vue'
 
 export interface ModuleDef {
   key: string
@@ -68,35 +69,23 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey))
         <div class="flex-1 space-y-6 overflow-y-auto px-5 pb-5">
           <section>
             <div class="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--ink-3)]">Modules</div>
-            <label
+            <Toggle
               v-for="m in baseModules"
               :key="m.key"
-              class="flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2 text-sm hover:bg-[var(--bg)]"
-            >
-              <input
-                type="checkbox"
-                class="accent-[var(--accent)]"
-                :checked="!props.hidden.includes(m.key)"
-                @change="emit('toggle', m.key)"
-              />
-              {{ m.label }}
-            </label>
+              :label="m.label"
+              :on="!props.hidden.includes(m.key)"
+              @change="emit('toggle', m.key)"
+            />
             <template v-if="tier2Modules.length">
               <div class="mt-3 mb-1 px-2 text-xs text-[var(--ink-3)]">Needs Tier-2 tracking</div>
-              <label
+              <Toggle
                 v-for="m in tier2Modules"
                 :key="m.key"
-                class="flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2 text-sm hover:bg-[var(--bg)]"
-                :class="{ 'opacity-50': !props.tier2 }"
-              >
-                <input
-                  type="checkbox"
-                  class="accent-[var(--accent)]"
-                  :checked="!props.hidden.includes(m.key)"
-                  @change="emit('toggle', m.key)"
-                />
-                {{ m.label }}
-              </label>
+                :label="m.label"
+                :on="!props.hidden.includes(m.key)"
+                :dim="!props.tier2"
+                @change="emit('toggle', m.key)"
+              />
             </template>
             <p class="mt-1 px-2 text-xs text-[var(--ink-3)]">Hidden modules aren't fetched at all.</p>
           </section>
@@ -118,15 +107,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey))
 
           <section>
             <div class="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--ink-3)]">Privacy</div>
-            <label class="flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2 text-sm hover:bg-[var(--bg)]">
-              <input
-                type="checkbox"
-                class="accent-[var(--accent)]"
-                :checked="props.tier2"
-                @change="emit('tier2', ($event.target as HTMLInputElement).checked)"
-              />
-              Tier-2 tracking
-            </label>
+            <Toggle label="Tier-2 tracking" :on="props.tier2" @change="(on) => emit('tier2', on)" />
             <p class="mt-1 px-2 text-xs text-[var(--ink-3)]">
               Standard tracking forgets visitors daily. Tier-2 remembers users who accept via a
               consent banner - <code class="rounded bg-[var(--bg)] px-1">melytics.consent(true)</code>,

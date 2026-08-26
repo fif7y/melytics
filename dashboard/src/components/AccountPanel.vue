@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { Me, Site } from '../lib/api'
+import Toggle from './Toggle.vue'
 
 const props = defineProps<{ site: Site | null; me: Me | null }>()
 const emit = defineEmits<{
@@ -88,24 +89,8 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey))
         <div class="flex-1 space-y-6 overflow-y-auto px-5 pb-5">
           <section v-if="site">
             <div class="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--ink-3)]">Notifications</div>
-            <label class="flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2 text-sm hover:bg-[var(--bg)]">
-              <input
-                type="checkbox"
-                class="accent-[var(--accent)]"
-                :checked="site.digest_enabled"
-                @change="emit('notify', 'digest_enabled', ($event.target as HTMLInputElement).checked)"
-              />
-              Weekly digest email
-            </label>
-            <label class="flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2 text-sm hover:bg-[var(--bg)]">
-              <input
-                type="checkbox"
-                class="accent-[var(--accent)]"
-                :checked="site.alerts_enabled"
-                @change="emit('notify', 'alerts_enabled', ($event.target as HTMLInputElement).checked)"
-              />
-              Spike &amp; drop alerts
-            </label>
+            <Toggle label="Weekly digest email" :on="site.digest_enabled" @change="(on) => emit('notify', 'digest_enabled', on)" />
+            <Toggle label="Spike & drop alerts" :on="site.alerts_enabled" @change="(on) => emit('notify', 'alerts_enabled', on)" />
             <p class="mt-1 px-2 text-xs text-[var(--ink-3)]">Alerts compare today to the trailing week, at most once a day.</p>
           </section>
 
