@@ -434,7 +434,9 @@ async function logout() {
           aria-label="Setup assistant"
           @click="wizard?.show()"
         >
-          <span class="text-[20px] leading-none" aria-hidden="true">✦</span>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M12 2 C12.9 7.9 16.1 11.1 22 12 C16.1 12.9 12.9 16.1 12 22 C11.1 16.1 7.9 12.9 2 12 C7.9 11.1 11.1 7.9 12 2 Z" />
+          </svg>
         </button>
 
         <button
