@@ -144,8 +144,8 @@ async function remove(id: number) {
         aria-label="Open the setup assistant"
         @click="emit('assist')"
       >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-          <path d="M12 2 C12.9 7.9 16.1 11.1 22 12 C16.1 12.9 12.9 16.1 12 22 C11.1 16.1 7.9 12.9 2 12 C7.9 11.1 11.1 7.9 12 2 Z" />
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 3 C12.8 8.2 15.8 11.2 21 12 C15.8 12.8 12.8 15.8 12 21 C11.2 15.8 8.2 12.8 3 12 C8.2 11.2 11.2 8.2 12 3 Z" />
         </svg>
       </button>
       <button class="text-sm text-[var(--accent)]" @click="openAdd">
