@@ -57,7 +57,7 @@ class IngestController extends Controller
             'utm_source' => isset($query['utm_source']) ? substr($query['utm_source'], 0, 255) : null,
             'utm_medium' => isset($query['utm_medium']) ? substr($query['utm_medium'], 0, 255) : null,
             'utm_campaign' => isset($query['utm_campaign']) ? substr($query['utm_campaign'], 0, 255) : null,
-            'country' => $enrich->country($request),
+            'country' => $enrich->country($request, $data['z'] ?? null),
             'device' => $parsed['device'],
             'browser' => $parsed['browser'],
             'os' => $parsed['os'],

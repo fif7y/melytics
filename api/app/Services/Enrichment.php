@@ -66,10 +66,10 @@ class Enrichment
 
     /**
      * Country resolution: CDN headers first (free + accurate), then a local
-     * MaxMind GeoLite2-Country.mmdb if present at storage/geoip/GeoLite2-Country.mmdb.
-     * IP is used in-memory only and never stored.
+     * mmdb (MaxMind GeoLite2 or DB-IP Lite) if present at storage/geoip/GeoLite2-Country.mmdb,
+     * then the visitor's IANA timezone. IP is used in-memory only and never stored.
      */
-    public function country(Request $request): ?string
+    public function country(Request $request, ?string $timezone = null): ?string
     {
         foreach (['CF-IPCountry', 'X-Vercel-IP-Country', 'X-Country-Code'] as $header) {
             $c = $request->header($header);
@@ -86,7 +86,15 @@ class Enrichment
 
                 return $reader->country($request->ip())->country->isoCode;
             } catch (\Throwable) {
-                return null;
+            }
+        }
+
+        if ($timezone) {
+            try {
+                $cc = (new \DateTimeZone($timezone))->getLocation()['country_code'] ?? null;
+
+                return ($cc && $cc !== '??') ? $cc : null;
+            } catch (\Throwable) {
             }
         }
 
