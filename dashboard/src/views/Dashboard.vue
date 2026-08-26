@@ -74,12 +74,14 @@ const order = ref<string[]>(
     }
   })()
 )
+// Vitals lives in the same reorderable grid as the breakdowns
+const GRID_ITEMS = [{ key: 'vitals', title: 'Web Vitals' }, ...PANELS]
 const orderedPanels = computed(() => {
   const idx = (k: string) => {
     const i = order.value.indexOf(k)
-    return i === -1 ? 100 + PANELS.findIndex((p) => p.key === k) : i
+    return i === -1 ? 100 + GRID_ITEMS.findIndex((p) => p.key === k) : i
   }
-  return PANELS.filter((p) => show(p.key)).slice().sort((a, b) => idx(a.key) - idx(b.key))
+  return GRID_ITEMS.filter((p) => show(p.key)).slice().sort((a, b) => idx(a.key) - idx(b.key))
 })
 const dragKey = ref<string | null>(null)
 const overKey = ref<string | null>(null)
@@ -310,8 +312,6 @@ async function logout() {
         </div>
       </section>
 
-      <VitalsCard v-if="vitals && show('vitals')" :vitals="vitals" />
-
       <div v-if="show('goals') || show('funnels')" class="grid gap-5 lg:grid-cols-2">
         <GoalsCard v-if="show('goals')" :site-id="siteId" :goals="goals" @changed="load" />
         <FunnelsCard v-if="show('funnels')" :site-id="siteId" :funnels="funnels" @changed="load" />
@@ -330,7 +330,9 @@ async function logout() {
           @dragleave="overKey === p.key && (overKey = null)"
           @drop.prevent="dropOn(p.key)"
         >
+          <VitalsCard v-if="p.key === 'vitals' && vitals" :vitals="vitals" />
           <BreakdownCard
+            v-else-if="p.key !== 'vitals'"
             :title="p.title"
             :rows="breakdowns[p.key] ?? []"
             :dim="p.key"
