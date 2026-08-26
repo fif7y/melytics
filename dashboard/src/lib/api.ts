@@ -57,6 +57,12 @@ export interface Site {
   name: string
   domain: string
   key: string
+  tier2_enabled: boolean
+}
+export interface Retention {
+  identified: number
+  new: number
+  returning: number
 }
 export interface Annotation {
   id: number

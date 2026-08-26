@@ -6,7 +6,10 @@
   if (!s) return;
   var site = s.getAttribute('data-site');
   var api = s.getAttribute('data-api') || '/api/echo';
-  var last;
+  var last, mid;
+
+  // Tier-2: persistent id only after melytics.consent(true); survives via localStorage
+  try { if (localStorage.__mlc) mid = localStorage.__mlid; } catch (e) {}
 
   function send(extra) {
     // Skip prerender and frames; localhost skipped unless data-dev present.
@@ -21,6 +24,7 @@
       w: w.innerWidth,
       z: Intl.DateTimeFormat().resolvedOptions().timeZone || null
     };
+    if (mid) p.i = mid;
     if (extra) for (var k in extra) p[k] = extra[k];
     try {
       fetch(api, {
@@ -35,7 +39,18 @@
   // Custom events: melytics.track('signup', {plan:'pro'})
   w.melytics = {
     track: function (name, props) { send({ e: name, p: props || null }); },
-    consent: function (ok) { w.__melc = !!ok; } // tier-2 gate, used by later features
+    consent: function (ok) { // tier-2 gate: grants/revokes the persistent id
+      try {
+        if (ok) {
+          localStorage.__mlc = 1;
+          mid = localStorage.__mlid || (localStorage.__mlid = Date.now().toString(36) + Math.random().toString(36).slice(2, 12));
+        } else {
+          delete localStorage.__mlc;
+          delete localStorage.__mlid;
+          mid = 0;
+        }
+      } catch (e) {}
+    }
   };
 
   // SPA route changes

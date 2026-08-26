@@ -192,6 +192,35 @@ class Stats
         ];
     }
 
+    /**
+     * Tier-2 retention: consented visitors in range, split new vs returning.
+     * Returning = visitor_id also seen before the range start.
+     *
+     * @return array{identified: int, new: int, returning: int}
+     */
+    public function retention(Site $site, Carbon $from, Carbon $to): array
+    {
+        $ids = DB::table('hits')
+            ->where('site_id', $site->id)
+            ->whereBetween('created_at', [$from, $to->copy()->endOfDay()])
+            ->whereNotNull('visitor_id')
+            ->distinct()
+            ->pluck('visitor_id');
+
+        $returning = $ids->isEmpty() ? 0 : DB::table('hits')
+            ->where('site_id', $site->id)
+            ->where('created_at', '<', $from)
+            ->whereIn('visitor_id', $ids)
+            ->distinct()
+            ->count('visitor_id');
+
+        return [
+            'identified' => $ids->count(),
+            'new' => $ids->count() - $returning,
+            'returning' => $returning,
+        ];
+    }
+
     /** @param array{dimension: string, value: string}|null $filter */
     public function series(int $siteId, Carbon $from, Carbon $to, string $interval, ?array $filter = null)
     {

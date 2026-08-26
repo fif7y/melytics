@@ -6,8 +6,8 @@ export interface ModuleDef {
   label: string
 }
 
-const props = defineProps<{ modules: ModuleDef[]; hidden: string[]; density: 'comfy' | 'compact' }>()
-const emit = defineEmits<{ toggle: [key: string]; density: [d: 'comfy' | 'compact']; signout: [] }>()
+const props = defineProps<{ modules: ModuleDef[]; hidden: string[]; density: 'comfy' | 'compact'; tier2: boolean }>()
+const emit = defineEmits<{ toggle: [key: string]; density: [d: 'comfy' | 'compact']; tier2: [on: boolean]; signout: [] }>()
 
 const open = ref(false)
 
@@ -88,6 +88,23 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey))
                 {{ d === 'comfy' ? 'Comfortable' : 'Compact' }}
               </button>
             </div>
+          </section>
+
+          <section>
+            <div class="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--ink-3)]">Privacy</div>
+            <label class="flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2 text-sm hover:bg-[var(--bg)]">
+              <input
+                type="checkbox"
+                class="accent-[var(--accent)]"
+                :checked="props.tier2"
+                @change="emit('tier2', ($event.target as HTMLInputElement).checked)"
+              />
+              Tier-2 tracking
+            </label>
+            <p class="mt-1 px-2 text-xs text-[var(--ink-3)]">
+              Stores a persistent visitor id for consented visitors only (your site must call
+              <code class="rounded bg-[var(--bg)] px-1">melytics.consent(true)</code>). Powers the Retention module.
+            </p>
           </section>
         </div>
 

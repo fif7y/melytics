@@ -64,6 +64,14 @@ class StatsController extends Controller
         return response()->json($this->stats->vitals($site, $from, $to));
     }
 
+    public function retention(Request $request, Site $site): JsonResponse
+    {
+        $this->authorizeSite($request, $site);
+        [$from, $to] = $this->stats->range($request->query('from'), $request->query('to'));
+
+        return response()->json($this->stats->retention($site, $from, $to));
+    }
+
     public function live(Request $request, Site $site): JsonResponse
     {
         $this->authorizeSite($request, $site);

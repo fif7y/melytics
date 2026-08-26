@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { api, setToken, type Annotation, type BreakdownRow, type Site, type Stats } from '../lib/api'
+import { api, setToken, type Annotation, type BreakdownRow, type Retention, type Site, type Stats } from '../lib/api'
 import TimeChart from '../components/TimeChart.vue'
 import BreakdownCard from '../components/BreakdownCard.vue'
 import StatStrip from '../components/StatStrip.vue'
 import GoalsCard, { type GoalRow } from '../components/GoalsCard.vue'
 import FunnelsCard, { type FunnelRow } from '../components/FunnelsCard.vue'
 import VitalsCard, { type Vitals } from '../components/VitalsCard.vue'
+import RetentionCard from '../components/RetentionCard.vue'
 import SharePanel from '../components/SharePanel.vue'
 import { theme, toggleTheme, effectiveTheme } from '../lib/theme'
 import SettingsPanel from '../components/SettingsPanel.vue'
@@ -20,6 +21,7 @@ const stats = ref<Stats | null>(null)
 const goals = ref<GoalRow[]>([])
 const funnels = ref<FunnelRow[]>([])
 const vitals = ref<Vitals | null>(null)
+const retention = ref<Retention | null>(null)
 const annotations = ref<Annotation[]>([])
 const noting = ref(false)
 const noteDay = ref(new Date().toISOString().slice(0, 10))
@@ -48,6 +50,7 @@ const PANELS = [
 
 const MODULES = [
   { key: 'vitals', label: 'Web Vitals' },
+  { key: 'retention', label: 'Retention' },
   { key: 'goals', label: 'Goals' },
   { key: 'funnels', label: 'Funnels' },
   ...PANELS.map((p) => ({ key: p.key, label: p.title })),
@@ -76,7 +79,7 @@ const order = ref<string[]>(
   })()
 )
 // Vitals lives in the same reorderable grid as the breakdowns
-const GRID_ITEMS = [{ key: 'vitals', title: 'Web Vitals' }, ...PANELS]
+const GRID_ITEMS = [{ key: 'vitals', title: 'Web Vitals' }, { key: 'retention', title: 'Retention' }, ...PANELS]
 const orderedPanels = computed(() => {
   const idx = (k: string) => {
     const i = order.value.indexOf(k)
@@ -151,12 +154,13 @@ async function load() {
   const id = siteId.value
   // hidden modules are not fetched at all (funnels especially are heavier queries)
   const activePanels = PANELS.filter((p) => show(p.key))
-  const [s, a, g, f, v, ...panels] = await Promise.all([
+  const [s, a, g, f, v, rt, ...panels] = await Promise.all([
     api<Stats>(`/sites/${id}/stats?${rangeParams()}${filterQS()}`),
     api<{ annotations: Annotation[] }>(`/sites/${id}/annotations?${rangeParams()}`),
     show('goals') ? api<{ goals: GoalRow[] }>(`/sites/${id}/goals?${rangeParams()}`) : null,
     show('funnels') ? api<{ funnels: FunnelRow[] }>(`/sites/${id}/funnels?${rangeParams()}`) : null,
     show('vitals') ? api<Vitals>(`/sites/${id}/vitals?${rangeParams()}`) : null,
+    show('retention') ? api<Retention>(`/sites/${id}/retention?${rangeParams()}`) : null,
     ...activePanels.map((p) =>
       api<{ rows: BreakdownRow[] }>(`/sites/${id}/breakdown?dimension=${p.key}&${rangeParams()}&limit=8${filterQS()}`)
     ),
@@ -166,6 +170,7 @@ async function load() {
   goals.value = g ? (g as { goals: GoalRow[] }).goals : []
   funnels.value = f ? (f as { funnels: FunnelRow[] }).funnels : []
   vitals.value = v ? (v as Vitals) : null
+  retention.value = rt ? (rt as Retention) : null
   breakdowns.value = Object.fromEntries(activePanels.map((p, i) => [p.key, panels[i].rows]))
   loading.value = false
 }
@@ -205,6 +210,15 @@ async function addNote() {
 async function removeNote(id: number) {
   await api(`/sites/${siteId.value}/annotations/${id}`, { method: 'DELETE' })
   annotations.value = annotations.value.filter((a) => a.id !== id)
+}
+
+async function setTier2(on: boolean) {
+  if (!site.value) return
+  const updated = await api<Site>(`/sites/${site.value.id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ tier2_enabled: on }),
+  })
+  sites.value = sites.value.map((s) => (s.id === updated.id ? updated : s))
 }
 
 async function logout() {
@@ -274,8 +288,10 @@ async function logout() {
           :modules="MODULES"
           :hidden="hidden"
           :density="density"
+          :tier2="site?.tier2_enabled ?? false"
           @toggle="toggleModule"
           @density="setDensity"
+          @tier2="setTier2"
           @signout="logout"
         />
       </div>
@@ -347,8 +363,14 @@ async function logout() {
           @drop.prevent="dropOn(p.key)"
         >
           <VitalsCard v-if="p.key === 'vitals' && vitals" class="h-full" :vitals="vitals" />
+          <RetentionCard
+            v-else-if="p.key === 'retention' && retention"
+            class="h-full"
+            :retention="retention"
+            :tier2-enabled="site?.tier2_enabled ?? false"
+          />
           <BreakdownCard
-            v-else-if="p.key !== 'vitals'"
+            v-else-if="p.key !== 'vitals' && p.key !== 'retention'"
             class="h-full"
             :title="p.title"
             :rows="breakdowns[p.key] ?? []"

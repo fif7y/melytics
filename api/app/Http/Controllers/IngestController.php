@@ -21,12 +21,17 @@ class IngestController extends Controller
             'z' => 'nullable|string|max:64',
             'e' => 'nullable|string|max:64',
             'p' => 'nullable|array',
+            'i' => 'nullable|alpha_num|max:32',
         ]);
 
-        $siteId = Cache::remember(
-            'site:'.$data['k'],
+        [$siteId, $tier2] = Cache::remember(
+            'site2:'.$data['k'], // key bumped: value shape changed from scalar id to [id, tier2]
             300,
-            fn () => Site::where('key', $data['k'])->value('id') ?? 0
+            function () use ($data) {
+                $site = Site::where('key', $data['k'])->first(['id', 'tier2_enabled']);
+
+                return $site ? [$site->id, $site->tier2_enabled] : [0, false];
+            }
         );
         if (! $siteId) {
             return response()->noContent(); // never leak which keys exist
@@ -52,6 +57,7 @@ class IngestController extends Controller
         Hit::create([
             'site_id' => $siteId,
             'visitor_hash' => $enrich->visitorHash($siteId, $request),
+            'visitor_id' => $tier2 ? ($data['i'] ?? null) : null,
             'path' => substr($url['path'] ?? '/', 0, 512),
             'referrer_host' => $refHost ? substr($refHost, 0, 255) : null,
             'utm_source' => isset($query['utm_source']) ? substr($query['utm_source'], 0, 255) : null,
