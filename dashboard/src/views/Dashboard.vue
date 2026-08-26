@@ -266,7 +266,7 @@ async function logout() {
     </header>
 
     <main v-if="stats" class="space-y-5" :class="{ compact: density === 'compact' }">
-      <StatStrip :stats="stats" :metric="metric" :live="live" :vitals="vitals" @update:metric="metric = $event" />
+      <StatStrip :stats="stats" :metric="metric" :live="live" @update:metric="metric = $event" />
 
       <section class="card p-5">
         <div class="flex items-baseline gap-3 mb-2">

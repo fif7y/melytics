@@ -1,13 +1,11 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { Stats } from '../lib/api'
-import type { Vitals } from './VitalsCard.vue'
 
 const props = defineProps<{
   stats: Stats
   metric: 'visitors' | 'pageviews'
   live: number | null
-  vitals: Vitals | null
 }>()
 const emit = defineEmits<{ 'update:metric': [m: 'visitors' | 'pageviews'] }>()
 
@@ -66,14 +64,6 @@ const tiles = computed(() => {
   ]
   if (props.live !== null) {
     out.push({ key: 'live', label: 'Live now', value: String(props.live), delta: null, liveDot: true })
-  }
-  if (props.vitals?.samples && props.vitals.lcp != null) {
-    out.push({
-      key: 'lcp',
-      label: 'LCP p75',
-      value: `${(props.vitals.lcp / 1000).toFixed(2)}s`,
-      delta: null,
-    })
   }
   return out
 })
