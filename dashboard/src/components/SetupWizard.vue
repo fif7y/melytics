@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { api } from '../lib/api'
 
-const props = defineProps<{ siteId: number }>()
+const props = defineProps<{ siteId: number; hasGoals?: boolean }>()
 const emit = defineEmits<{ close: []; created: [] }>()
 
 const open = ref(false)
@@ -162,7 +162,7 @@ const STEPS = ['Welcome', 'Goals', 'Funnel', 'Create']
             </div>
 
             <button class="wiz-rise mt-10 rounded-xl bg-[var(--accent)] px-6 py-3 text-sm font-medium text-white transition-transform hover:scale-[1.02]" style="--d: 5" @click="go(1)">
-              Set up my first goals
+              {{ props.hasGoals ? 'Set up new goals' : 'Set up my first goals' }}
             </button>
           </div>
 

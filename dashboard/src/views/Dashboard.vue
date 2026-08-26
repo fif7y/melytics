@@ -439,7 +439,7 @@ async function logout() {
       </div>
     </header>
 
-    <SetupWizard v-if="siteId" ref="wizard" :site-id="siteId" @created="load" />
+    <SetupWizard v-if="siteId" ref="wizard" :site-id="siteId" :has-goals="goals.length > 0" @created="load" />
 
     <div
       v-if="me && !me.verified"
