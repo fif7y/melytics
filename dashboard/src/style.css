@@ -12,6 +12,7 @@
   --accent-soft: rgba(42, 120, 214, 0.12);
   --compare: #b9b8b1;
   --up: #008300;
+  --warn: #d97706;
   --down: #e34948;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 4px 16px rgba(0, 0, 0, 0.05);
 }
@@ -27,6 +28,7 @@
     --accent-soft: rgba(57, 135, 229, 0.16);
     --compare: #4a4a46;
     --up: #35a55a;
+    --warn: #e8a13d;
     --down: #e66767;
     --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 16px rgba(0, 0, 0, 0.25);
   }

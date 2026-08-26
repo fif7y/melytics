@@ -26,6 +26,7 @@ const breakdowns = ref<Record<string, BreakdownRow[]>>({})
 const live = ref<number | null>(null)
 const metric = ref<'visitors' | 'pageviews'>('visitors')
 const rangeDays = ref(30)
+const filter = ref<{ dim: string; value: string } | null>(null)
 const loading = ref(true)
 
 const RANGES = [
@@ -87,6 +88,19 @@ function rangeParams() {
   return `from=${iso(from)}&to=${iso(to)}`
 }
 
+const filterQS = () =>
+  filter.value ? `&filter=${encodeURIComponent(`${filter.value.dim}:${filter.value.value}`)}` : ''
+
+function setFilter(dim: string, value: string) {
+  filter.value = filter.value?.dim === dim && filter.value.value === value ? null : { dim, value }
+}
+
+const filterLabel = computed(() => {
+  if (!filter.value) return ''
+  const panel = PANELS.find((p) => p.key === filter.value!.dim)
+  return `${panel?.title ?? filter.value.dim}: ${filter.value.value}`
+})
+
 async function load() {
   if (!siteId.value) return
   loading.value = true
@@ -94,13 +108,13 @@ async function load() {
   // hidden modules are not fetched at all (funnels especially are heavier queries)
   const activePanels = PANELS.filter((p) => show(p.key))
   const [s, a, g, f, v, ...panels] = await Promise.all([
-    api<Stats>(`/sites/${id}/stats?${rangeParams()}`),
+    api<Stats>(`/sites/${id}/stats?${rangeParams()}${filterQS()}`),
     api<{ annotations: Annotation[] }>(`/sites/${id}/annotations?${rangeParams()}`),
     show('goals') ? api<{ goals: GoalRow[] }>(`/sites/${id}/goals?${rangeParams()}`) : null,
     show('funnels') ? api<{ funnels: FunnelRow[] }>(`/sites/${id}/funnels?${rangeParams()}`) : null,
     show('vitals') ? api<Vitals>(`/sites/${id}/vitals?${rangeParams()}`) : null,
     ...activePanels.map((p) =>
-      api<{ rows: BreakdownRow[] }>(`/sites/${id}/breakdown?dimension=${p.key}&${rangeParams()}&limit=8`)
+      api<{ rows: BreakdownRow[] }>(`/sites/${id}/breakdown?dimension=${p.key}&${rangeParams()}&limit=8${filterQS()}`)
     ),
   ])
   stats.value = s as Stats
@@ -129,7 +143,7 @@ onMounted(async () => {
 })
 onBeforeUnmount(() => clearInterval(liveTimer))
 
-watch([siteId, rangeDays], load)
+watch([siteId, rangeDays, filter], load)
 
 async function addNote() {
   if (!noteText.value || !siteId.value) return
@@ -176,6 +190,14 @@ async function logout() {
       <span v-if="live !== null" class="flex items-center gap-1.5 text-sm text-[var(--ink-2)]">
         <span class="h-2 w-2 rounded-full bg-[var(--up)]" :class="{ 'animate-pulse': live > 0 }" />
         {{ live }} online
+      </span>
+
+      <span
+        v-if="filter"
+        class="flex items-center gap-1.5 rounded-full bg-[var(--accent-soft)] px-3 py-1 text-sm font-medium text-[var(--accent)]"
+      >
+        <span class="max-w-56 truncate">{{ filterLabel }}</span>
+        <button class="leading-none hover:opacity-70" title="Clear filter" @click="filter = null">×</button>
       </span>
 
       <div class="ml-auto flex items-center gap-1 rounded-lg bg-[var(--surface)] p-1">
@@ -270,6 +292,8 @@ async function logout() {
           :key="p.key"
           :title="p.title"
           :rows="breakdowns[p.key] ?? []"
+          :selected="filter?.dim === p.key ? filter.value : null"
+          @select="(v) => setFilter(p.key, v)"
         />
       </div>
     </main>

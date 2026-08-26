@@ -17,7 +17,20 @@ class StatsController extends Controller
         $this->authorizeSite($request, $site);
         [$from, $to, $interval] = $this->stats->range($request->query('from'), $request->query('to'), $request->query('interval'));
 
-        return response()->json($this->stats->overview($site, $from, $to, $interval));
+        return response()->json($this->stats->overview($site, $from, $to, $interval, $this->filterParam($request)));
+    }
+
+    /** Parse an optional "dimension:value" cross-filter query param. */
+    private function filterParam(Request $request): ?array
+    {
+        $raw = $request->query('filter');
+        if (! is_string($raw) || ! str_contains($raw, ':')) {
+            return null;
+        }
+        [$dimension, $value] = explode(':', $raw, 2);
+        abort_unless(array_key_exists($dimension, Stats::FILTERABLE) && $value !== '', 422);
+
+        return ['dimension' => $dimension, 'value' => $value];
     }
 
     public function breakdown(Request $request, Site $site): JsonResponse
@@ -31,7 +44,7 @@ class StatsController extends Controller
 
         return response()->json([
             'dimension' => $dimension,
-            'rows' => $this->stats->breakdown($site, $dimension, $from, $to, $limit),
+            'rows' => $this->stats->breakdown($site, $dimension, $from, $to, $limit, $this->filterParam($request)),
         ]);
     }
 

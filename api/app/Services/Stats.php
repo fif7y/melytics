@@ -9,23 +9,56 @@ use Illuminate\Support\Facades\DB;
 
 class Stats
 {
-    public function overview(Site $site, Carbon $from, Carbon $to, string $interval): array
+    /** Dimensions that can filter the whole dashboard, mapped to their hits column. */
+    public const FILTERABLE = [
+        'page' => 'path',
+        'referrer' => 'referrer_host',
+        'country' => 'country',
+        'device' => 'device',
+        'browser' => 'browser',
+        'os' => 'os',
+        'utm_source' => 'utm_source',
+        'utm_medium' => 'utm_medium',
+        'utm_campaign' => 'utm_campaign',
+        'event' => 'event',
+    ];
+
+    /** @param array{dimension: string, value: string}|null $filter */
+    public function overview(Site $site, Carbon $from, Carbon $to, string $interval, ?array $filter = null): array
     {
         $days = (int) $from->diffInDays($to) + 1;
         $prevFrom = $from->copy()->subDays($days);
         $prevTo = $from->copy()->subDay();
 
         return [
-            'series' => $this->series($site->id, $from, $to, $interval),
-            'previous_series' => $this->series($site->id, $prevFrom, $prevTo, $interval),
-            'totals' => $this->totals($site->id, $from, $to),
-            'previous_totals' => $this->totals($site->id, $prevFrom, $prevTo),
+            'series' => $this->series($site->id, $from, $to, $interval, $filter),
+            'previous_series' => $this->series($site->id, $prevFrom, $prevTo, $interval, $filter),
+            'totals' => $this->totals($site->id, $from, $to, $filter),
+            'previous_totals' => $this->totals($site->id, $prevFrom, $prevTo, $filter),
             'range' => ['from' => $from->toDateString(), 'to' => $to->toDateString(), 'interval' => $interval],
         ];
     }
 
-    public function breakdown(Site $site, string $dimension, Carbon $from, Carbon $to, int $limit = 20)
+    /** @param array{dimension: string, value: string}|null $filter */
+    public function breakdown(Site $site, string $dimension, Carbon $from, Carbon $to, int $limit = 20, ?array $filter = null)
     {
+        if ($filter) {
+            $col = self::FILTERABLE[$dimension];
+            $q = $this->filteredHits($site->id, $from, $to, $filter);
+            if ($dimension === 'event') {
+                $q->whereNotNull('event')->whereRaw("substr(event, 1, 2) != '__'");
+            } elseif ($filter['dimension'] !== 'event') {
+                $q->whereNull('event');
+            }
+
+            return $q->whereNotNull($col)->where($col, '!=', '')
+                ->groupBy($col)
+                ->orderByRaw('COUNT(*) DESC')
+                ->limit($limit)
+                ->selectRaw("$col as value, COUNT(*) as pageviews, COUNT(DISTINCT visitor_hash) as visitors")
+                ->get();
+        }
+
         return DB::table('rollup_daily')
             ->where('site_id', $site->id)
             ->whereBetween('day', [$from->toDateString(), $to->toDateString()])
@@ -36,6 +69,15 @@ class Stats
             ->limit($limit)
             ->selectRaw('value, SUM(pageviews) as pageviews, SUM(visitors) as visitors')
             ->get();
+    }
+
+    /** Raw-hits base query for a cross-filter (rollups are per-dimension, so filtered stats must scan hits). */
+    private function filteredHits(int $siteId, Carbon $from, Carbon $to, array $filter)
+    {
+        return DB::table('hits')
+            ->where('site_id', $siteId)
+            ->whereBetween('created_at', [$from, $to->copy()->endOfDay()])
+            ->where(self::FILTERABLE[$filter['dimension']], $filter['value']);
     }
 
     /** Conversion counts for each goal over the range, with rate vs total visitors. */
@@ -150,8 +192,26 @@ class Stats
         ];
     }
 
-    public function series(int $siteId, Carbon $from, Carbon $to, string $interval)
+    /** @param array{dimension: string, value: string}|null $filter */
+    public function series(int $siteId, Carbon $from, Carbon $to, string $interval, ?array $filter = null)
     {
+        if ($filter) {
+            $driver = DB::connection()->getDriverName();
+            $expr = $interval === 'hour'
+                ? ($driver === 'mysql' ? "DATE_FORMAT(created_at, '%Y-%m-%d %H:00:00')" : "strftime('%Y-%m-%d %H:00:00', created_at)")
+                : ($driver === 'mysql' ? 'DATE(created_at)' : 'date(created_at)');
+
+            $q = $this->filteredHits($siteId, $from, $to, $filter);
+            if ($filter['dimension'] !== 'event') {
+                $q->whereNull('event');
+            }
+
+            return $q->groupByRaw($expr)
+                ->orderByRaw($expr)
+                ->selectRaw("$expr as t, COUNT(*) as pageviews, COUNT(DISTINCT visitor_hash) as visitors")
+                ->get();
+        }
+
         $table = $interval === 'hour' ? 'rollup_hourly' : 'rollup_daily';
         $col = $interval === 'hour' ? 'ts' : 'day';
 
@@ -166,8 +226,21 @@ class Stats
             ->get();
     }
 
-    public function totals(int $siteId, Carbon $from, Carbon $to): array
+    /** @param array{dimension: string, value: string}|null $filter */
+    public function totals(int $siteId, Carbon $from, Carbon $to, ?array $filter = null): array
     {
+        if ($filter) {
+            $q = $this->filteredHits($siteId, $from, $to, $filter);
+            if ($filter['dimension'] !== 'event') {
+                $q->whereNull('event');
+            }
+
+            return [
+                'pageviews' => (clone $q)->count(),
+                'visitors' => (clone $q)->distinct()->count('visitor_hash'),
+            ];
+        }
+
         $row = DB::table('rollup_daily')
             ->where('site_id', $siteId)
             ->where('dimension', 'total')
