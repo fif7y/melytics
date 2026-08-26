@@ -95,6 +95,11 @@
     });
   }
 
+  // Heartbeat: keeps "Live now" honest while a visible tab idles on one page
+  setInterval(function () {
+    if (d.visibilityState === 'visible') send({ e: '__ping' });
+  }, 120000);
+
   // Initial pageview (after paint so we never block)
   if (d.visibilityState === 'prerender') {
     d.addEventListener('visibilitychange', function f() {

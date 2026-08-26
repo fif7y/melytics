@@ -85,7 +85,8 @@ class StatsController extends Controller
         $pages = DB::table('hits')
             ->where('site_id', $site->id)
             ->where('created_at', '>=', $since)
-            ->whereNull('event')
+            // pageviews plus heartbeat pings, so idle-but-present visitors keep their page listed
+            ->where(fn ($q) => $q->whereNull('event')->orWhere('event', '__ping'))
             ->groupBy('path')
             ->orderByRaw('COUNT(DISTINCT visitor_hash) DESC')
             ->limit(10)
