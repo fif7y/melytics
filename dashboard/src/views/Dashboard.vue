@@ -17,6 +17,7 @@ import SharePanel from '../components/SharePanel.vue'
 import { theme, toggleTheme, effectiveTheme } from '../lib/theme'
 import SettingsPanel from '../components/SettingsPanel.vue'
 import AccountPanel from '../components/AccountPanel.vue'
+import SetupWizard from '../components/SetupWizard.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -272,6 +273,7 @@ onMounted(async () => {
 })
 
 const me = ref<Me | null>(null)
+const wizard = ref<InstanceType<typeof SetupWizard> | null>(null)
 const resent = ref(false)
 async function resendVerification() {
   await api('/auth/resend-verification', { method: 'POST' })
@@ -390,6 +392,18 @@ async function logout() {
 
         <button
           class="flex h-9 w-9 items-center justify-center rounded-lg text-[var(--ink-2)] hover:bg-[var(--surface)] hover:text-[var(--ink)]"
+          title="Setup assistant"
+          aria-label="Setup assistant"
+          @click="wizard?.show()"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 3v3m0 12v3M3 12h3m12 0h3" />
+            <path d="M12 8.5 13.2 11l2.6 1-2.6 1L12 15.5 10.8 13l-2.6-1 2.6-1z" />
+          </svg>
+        </button>
+
+        <button
+          class="flex h-9 w-9 items-center justify-center rounded-lg text-[var(--ink-2)] hover:bg-[var(--surface)] hover:text-[var(--ink)]"
           :title="effectiveTheme() === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'"
           :aria-label="effectiveTheme() === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'"
           @click="toggleTheme()"
@@ -424,6 +438,8 @@ async function logout() {
         />
       </div>
     </header>
+
+    <SetupWizard v-if="siteId" ref="wizard" :site-id="siteId" @created="load" />
 
     <div
       v-if="me && !me.verified"
@@ -493,7 +509,7 @@ async function logout() {
       </section>
 
       <div v-if="show('goals') || show('funnels')" class="grid gap-5 lg:grid-cols-2">
-        <GoalsCard v-if="show('goals')" class="h-full" :site-id="siteId" :goals="goals" @changed="load" />
+        <GoalsCard v-if="show('goals')" class="h-full" :site-id="siteId" :goals="goals" @changed="load" @assist="wizard?.show()" />
         <FunnelsCard v-if="show('funnels')" class="h-full" :site-id="siteId" :funnels="funnels" @changed="load" />
       </div>
 

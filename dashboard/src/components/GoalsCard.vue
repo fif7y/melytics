@@ -12,7 +12,7 @@ export interface GoalRow {
 }
 
 const props = defineProps<{ siteId: number; goals: GoalRow[] }>()
-const emit = defineEmits<{ changed: [] }>()
+const emit = defineEmits<{ changed: []; assist: [] }>()
 
 const adding = ref(false)
 const name = ref('')
@@ -74,6 +74,7 @@ async function remove(id: number) {
 
     <p v-if="!goals.length && !adding" class="text-sm text-[var(--ink-3)]">
       Track conversions: an event (<code>melytics.track('signup')</code>) or a page visit (<code>/thanks</code>).
+      New to goals? <button class="text-[var(--accent)]" @click="emit('assist')">Open the setup assistant</button>.
     </p>
 
     <ul class="space-y-1.5">
