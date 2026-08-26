@@ -242,6 +242,21 @@ class Stats
     }
 
     /** Conversion counts for each goal over the range, with rate vs total visitors. */
+    /**
+     * Trailing-slash-insensitive path matching for goals/funnels: '/about'
+     * matches '/about/' and vice versa; '*' is a wildcard as before.
+     */
+    public static function pathMatch($q, string $pattern): void
+    {
+        $like = str_replace('*', '%', $pattern);
+        if (str_ends_with($like, '%')) {
+            $q->where('path', 'like', $like);
+        } else {
+            $like = rtrim($like, '/') ?: '/';
+            $q->where(fn ($w) => $w->where('path', 'like', $like)->orWhere('path', 'like', $like.'/'));
+        }
+    }
+
     public function goals(Site $site, Carbon $from, Carbon $to): array
     {
         $visitors = max($this->totals($site->id, $from, $to)['visitors'], 1);
@@ -252,7 +267,8 @@ class Stats
             if ($goal->event) {
                 $q->where('event', $goal->event);
             } else {
-                $q->whereNull('event')->where('path', 'like', str_replace('*', '%', $goal->path_pattern));
+                $q->whereNull('event');
+                self::pathMatch($q, $goal->path_pattern);
             }
             $conversions = $q->distinct()->count('visitor_hash');
 
@@ -288,7 +304,8 @@ class Stats
             if (! empty($step['event'])) {
                 $q->where('event', $step['event']);
             } else {
-                $q->whereNull('event')->where('path', 'like', str_replace('*', '%', $step['path_pattern'] ?? '/'));
+                $q->whereNull('event');
+                self::pathMatch($q, $step['path_pattern'] ?? '/');
             }
             $times = $q->groupBy('visitor_hash')
                 ->selectRaw('visitor_hash, MIN(created_at) as t')
@@ -504,9 +521,14 @@ class Stats
             ->whereNotNull('visitor_id')
             ->where(function ($q) use ($goals) {
                 foreach ($goals as $g) {
-                    $q->orWhere(fn ($w) => $g->event
-                        ? $w->where('event', $g->event)
-                        : $w->whereNull('event')->where('path', 'like', str_replace('*', '%', $g->path_pattern)));
+                    $q->orWhere(function ($w) use ($g) {
+                        if ($g->event) {
+                            $w->where('event', $g->event);
+                        } else {
+                            $w->whereNull('event');
+                            self::pathMatch($w, $g->path_pattern);
+                        }
+                    });
                 }
             })
             ->groupBy('visitor_id')
