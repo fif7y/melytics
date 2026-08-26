@@ -47,6 +47,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/sites/{site}/funnels', [FunnelController::class, 'index']);
     Route::post('/sites/{site}/funnels', [FunnelController::class, 'store']);
+    Route::patch('/sites/{site}/funnels/{funnel}', [FunnelController::class, 'update']);
     Route::delete('/sites/{site}/funnels/{funnel}', [FunnelController::class, 'destroy']);
 
     Route::get('/sites/{site}/annotations', [AnnotationController::class, 'index']);

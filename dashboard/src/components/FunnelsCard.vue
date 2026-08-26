@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { api } from '../lib/api'
+import TargetPicker from './TargetPicker.vue'
 
 export interface FunnelStep {
   name: string
@@ -10,40 +11,52 @@ export interface FunnelStep {
 export interface FunnelRow {
   id: number
   name: string
+  definition?: { name?: string; event?: string | null; path_pattern?: string | null }[]
   steps: FunnelStep[]
 }
 
-const props = defineProps<{ siteId: number; funnels: FunnelRow[] }>()
+const props = defineProps<{ siteId: number; funnels: FunnelRow[]; targets?: { pages: string[]; events: string[] } }>()
 const emit = defineEmits<{ changed: []; assist: [] }>()
 
-const adding = ref(false)
-const name = ref('')
-const stepsText = ref('')
+// One wizard-style builder serves both add and edit
+const formOpen = ref(false)
+const editingId = ref<number | null>(null)
+const fName = ref('')
+const fSteps = ref<string[]>(['', ''])
 const busy = ref(false)
 
-async function add() {
-  const steps = stepsText.value
-    .split('\n')
-    .map((l) => l.trim())
+function openAdd() {
+  formOpen.value = !formOpen.value
+  editingId.value = null
+  fName.value = ''
+  fSteps.value = ['', '']
+}
+
+function startEdit(f: FunnelRow) {
+  formOpen.value = true
+  editingId.value = f.id
+  fName.value = f.name
+  fSteps.value = (f.definition ?? []).map((s) => s.event ?? s.path_pattern ?? '')
+  if (fSteps.value.length < 2) fSteps.value = ['', '']
+}
+
+async function save() {
+  const steps = fSteps.value
+    .map((s) => s.trim())
     .filter(Boolean)
-    .map((l) => {
-      // "Label = target" or just the target; leading / means path
-      const [target, label] = l.includes('=') ? [l.split('=')[1].trim(), l.split('=')[0].trim()] : [l, l]
-      return target.startsWith('/')
-        ? { name: label, path_pattern: target }
-        : { name: label, event: target }
-    })
-  if (!name.value || steps.length < 2) return
+    .map((s) => (s.startsWith('/') ? { name: s, path_pattern: s } : { name: s, event: s }))
+  if (!fName.value || steps.length < 2) return
   busy.value = true
   try {
-    await api(`/sites/${props.siteId}/funnels`, {
-      method: 'POST',
-      body: JSON.stringify({ name: name.value, steps }),
+    await api(editingId.value ? `/sites/${props.siteId}/funnels/${editingId.value}` : `/sites/${props.siteId}/funnels`, {
+      method: editingId.value ? 'PATCH' : 'POST',
+      body: JSON.stringify({ name: fName.value, steps }),
     })
-    name.value = ''
-    stepsText.value = ''
-    adding.value = false
+    formOpen.value = false
+    editingId.value = null
     emit('changed')
+  } catch (e) {
+    alert(e instanceof Error ? e.message : 'Could not save the funnel')
   } finally {
     busy.value = false
   }
@@ -66,27 +79,43 @@ async function remove(id: number) {
       <button class="ml-auto text-sm text-[var(--ink-3)] hover:text-[var(--ink)]" title="Open the setup assistant" @click="emit('assist')">
         Assistant
       </button>
-      <button class="text-sm text-[var(--accent)]" @click="adding = !adding">
-        {{ adding ? 'Cancel' : 'Add funnel' }}
+      <button class="text-sm text-[var(--accent)]" @click="openAdd">
+        {{ formOpen ? 'Cancel' : 'Add funnel' }}
       </button>
     </div>
 
-    <form v-if="adding" class="space-y-2 mb-4" @submit.prevent="add">
+    <form v-if="formOpen" class="mb-5 space-y-2" @submit.prevent="save">
       <input
-        v-model="name"
+        v-model="fName"
         placeholder="Name"
-        class="w-full rounded-lg px-3 py-1.5 text-sm bg-[var(--bg)] outline-none focus:ring-2 ring-[var(--accent)] placeholder:text-[var(--ink-3)]"
+        class="w-full rounded-lg px-3 py-1.5 text-sm font-medium bg-[var(--bg)] outline-none focus:ring-2 ring-[var(--accent)] placeholder:text-[var(--ink-3)]"
       />
-      <textarea
-        v-model="stepsText"
-        rows="3"
-        placeholder="One step per line, in order: event name or /path (wildcards ok).&#10;Optional label: Landing = /pricing"
-        class="w-full rounded-lg px-3 py-1.5 text-sm bg-[var(--bg)] outline-none focus:ring-2 ring-[var(--accent)] placeholder:text-[var(--ink-3)]"
-      />
-      <button :disabled="busy" class="rounded-lg px-3 py-1.5 text-sm text-white bg-[var(--accent)] disabled:opacity-50">Save</button>
+      <div v-for="(_, i) in fSteps" :key="i" class="flex items-center gap-2">
+        <span class="w-4 text-right text-xs tabular-nums text-[var(--ink-3)]">{{ i + 1 }}</span>
+        <TargetPicker
+          v-model="fSteps[i]"
+          :targets="targets"
+          placeholder="Pick a page or event, or type your own"
+        />
+        <button
+          v-if="fSteps.length > 2"
+          type="button"
+          class="text-[var(--ink-3)] hover:text-[var(--down)]"
+          :aria-label="`Remove step ${i + 1}`"
+          @click="fSteps.splice(i, 1)"
+        >
+          ×
+        </button>
+      </div>
+      <div class="flex items-center gap-2 pl-6">
+        <button v-if="fSteps.length < 8" type="button" class="text-sm text-[var(--accent)]" @click="fSteps.push('')">+ Add step</button>
+        <button :disabled="busy" class="ml-auto rounded-lg px-3 py-1.5 text-sm text-white bg-[var(--accent)] disabled:opacity-50">
+          {{ editingId ? 'Save changes' : 'Create funnel' }}
+        </button>
+      </div>
     </form>
 
-    <p v-if="!funnels.length && !adding" class="text-sm text-[var(--ink-3)]">
+    <p v-if="!funnels.length && !formOpen" class="text-sm text-[var(--ink-3)]">
       See where visitors drop off across a sequence of pages or events.
     </p>
 
@@ -97,7 +126,17 @@ async function remove(id: number) {
           {{ f.steps[f.steps.length - 1].rate }}% overall
         </span>
         <button
-          class="ml-auto -my-1 flex h-7 w-7 items-center justify-center rounded-md text-[var(--ink-3)] opacity-60 transition-opacity hover:bg-[var(--bg)] hover:text-[var(--down)] group-hover:opacity-100"
+          class="ml-auto -my-1 flex h-7 w-7 items-center justify-center rounded-md text-[var(--ink-3)] opacity-60 transition-opacity hover:bg-[var(--bg)] hover:text-[var(--ink)] group-hover:opacity-100"
+          title="Edit funnel"
+          aria-label="Edit funnel"
+          @click="startEdit(f)"
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z" />
+          </svg>
+        </button>
+        <button
+          class="-my-1 flex h-7 w-7 items-center justify-center rounded-md text-[var(--ink-3)] opacity-60 transition-opacity hover:bg-[var(--bg)] hover:text-[var(--down)] group-hover:opacity-100"
           title="Delete funnel"
           aria-label="Delete funnel"
           @click="remove(f.id)"
