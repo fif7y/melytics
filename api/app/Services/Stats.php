@@ -652,24 +652,56 @@ class Stats
                 $q->whereNull('event');
             }
 
-            return $q->groupByRaw($expr)
-                ->orderByRaw($expr)
-                ->selectRaw("$expr as t, COUNT(*) as pageviews, COUNT(DISTINCT visitor_hash) as visitors")
-                ->get();
+            return self::zeroFill(
+                $q->groupByRaw($expr)
+                    ->orderByRaw($expr)
+                    ->selectRaw("$expr as t, COUNT(*) as pageviews, COUNT(DISTINCT visitor_hash) as visitors")
+                    ->get(),
+                $from, $to, $interval, $offsetMin
+            );
         }
 
         $table = $interval === 'hour' ? 'rollup_hourly' : 'rollup_daily';
         $col = $interval === 'hour' ? 'ts' : 'day';
 
-        return DB::table($table)
-            ->where('site_id', $siteId)
-            ->where('dimension', 'total')
-            ->whereBetween($col, $interval === 'hour'
-                ? [$from->toDateTimeString(), $to->copy()->endOfDay()->toDateTimeString()]
-                : [$from->toDateString(), $to->toDateString()])
-            ->orderBy($col)
-            ->select([$col.' as t', 'pageviews', 'visitors', 'sessions', 'bounces', 'duration_sum'])
-            ->get();
+        return self::zeroFill(
+            DB::table($table)
+                ->where('site_id', $siteId)
+                ->where('dimension', 'total')
+                ->whereBetween($col, $interval === 'hour'
+                    ? [$from->toDateTimeString(), $to->copy()->endOfDay()->toDateTimeString()]
+                    : [$from->toDateString(), $to->toDateString()])
+                ->orderBy($col)
+                ->select([$col.' as t', 'pageviews', 'visitors', 'sessions', 'bounces', 'duration_sum'])
+                ->get(),
+            $from, $to, $interval, $offsetMin
+        );
+    }
+
+    /**
+     * Fill missing buckets with zeros across the requested range so sparse
+     * history charts at the requested width (and dead days dip to zero
+     * instead of the line bridging over them). Buckets in the future — past
+     * the site-local "now" — are not emitted.
+     */
+    private static function zeroFill($rows, Carbon $from, Carbon $to, string $interval, int $offsetMin)
+    {
+        $fmt = $interval === 'hour' ? 'Y-m-d H:00:00' : 'Y-m-d';
+        $byT = $rows->keyBy('t');
+        $zero = array_merge(
+            array_fill_keys($rows->first() ? array_keys((array) $rows->first()) : ['pageviews', 'visitors'], 0),
+            []
+        );
+        $nowLocal = now()->addMinutes($offsetMin);
+        $end = ($interval === 'hour' ? $to->copy()->endOfDay() : $to->copy())->min($nowLocal);
+
+        $out = collect();
+        for ($cur = $from->copy(); $cur <= $end; $cur->add($interval === 'hour' ? '1 hour' : '1 day')) {
+            $t = $cur->format($fmt);
+            $out->push($byT->get($t) ?? (object) array_merge($zero, ['t' => $t]));
+        }
+
+        return $out;
     }
 
     /** @param array{dimension: string, value: string}|null $filter */
