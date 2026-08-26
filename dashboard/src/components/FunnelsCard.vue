@@ -50,8 +50,12 @@ async function add() {
 }
 
 async function remove(id: number) {
-  await api(`/sites/${props.siteId}/funnels/${id}`, { method: 'DELETE' })
-  emit('changed')
+  try {
+    await api(`/sites/${props.siteId}/funnels/${id}`, { method: 'DELETE' })
+    emit('changed')
+  } catch (e) {
+    alert(e instanceof Error ? e.message : 'Could not delete the funnel')
+  }
 }
 </script>
 
@@ -90,8 +94,9 @@ async function remove(id: number) {
           {{ f.steps[f.steps.length - 1].rate }}% overall
         </span>
         <button
-          class="ml-auto opacity-0 group-hover:opacity-100 text-[var(--ink-3)] hover:text-[var(--down)] text-sm"
+          class="ml-auto -my-1 flex h-7 w-7 items-center justify-center rounded-md text-[var(--ink-3)] opacity-60 transition-opacity hover:bg-[var(--bg)] hover:text-[var(--down)] group-hover:opacity-100"
           title="Delete funnel"
+          aria-label="Delete funnel"
           @click="remove(f.id)"
         >
           ×

@@ -41,17 +41,24 @@ async function add() {
 }
 
 async function remove(id: number) {
-  await api(`/sites/${props.siteId}/goals/${id}`, { method: 'DELETE' })
-  emit('changed')
+  try {
+    await api(`/sites/${props.siteId}/goals/${id}`, { method: 'DELETE' })
+    emit('changed')
+  } catch (e) {
+    alert(e instanceof Error ? e.message : 'Could not delete the goal')
+  }
 }
 </script>
 
 <template>
   <section class="card p-5">
-    <div class="flex items-center mb-4">
+    <div class="flex items-center gap-3 mb-4">
       <h3 class="text-sm font-medium text-[var(--ink-2)]">Goals</h3>
+      <button class="ml-auto text-sm text-[var(--ink-3)] hover:text-[var(--ink)]" title="Open the setup assistant" @click="emit('assist')">
+        Assistant
+      </button>
       <button
-        class="ml-auto text-sm text-[var(--accent)]"
+        class="text-sm text-[var(--accent)]"
         @click="adding = !adding"
       >
         {{ adding ? 'Cancel' : 'Add goal' }}
@@ -84,8 +91,9 @@ async function remove(id: number) {
         <span class="ml-auto text-sm tabular-nums">{{ g.conversions.toLocaleString() }}</span>
         <span class="text-sm tabular-nums text-[var(--ink-2)] w-14 text-right">{{ g.rate }}%</span>
         <button
-          class="opacity-0 group-hover:opacity-100 text-[var(--ink-3)] hover:text-[var(--down)] text-sm"
+          class="-my-1 flex h-7 w-7 items-center justify-center self-center rounded-md text-[var(--ink-3)] opacity-60 transition-opacity hover:bg-[var(--bg)] hover:text-[var(--down)] group-hover:opacity-100"
           title="Delete goal"
+          aria-label="Delete goal"
           @click="remove(g.id)"
         >
           ×
