@@ -86,6 +86,20 @@ function openRangePicker() {
   pickTo.value = customRange.value?.to ?? todayIso()
   pickingRange.value = true
 }
+// Quick presets fill the fields; Apply still commits
+const RANGE_PRESETS: { label: string; range: () => [Date, Date] }[] = [
+  { label: 'This month', range: () => [new Date(new Date().getFullYear(), new Date().getMonth(), 1), new Date()] },
+  { label: 'Last month', range: () => [new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1), new Date(new Date().getFullYear(), new Date().getMonth(), 0)] },
+  { label: 'Year to date', range: () => [new Date(new Date().getFullYear(), 0, 1), new Date()] },
+  { label: 'Last 12 months', range: () => [new Date(new Date().getFullYear() - 1, new Date().getMonth(), new Date().getDate()), new Date()] },
+]
+function applyPresetChip(p: (typeof RANGE_PRESETS)[number]) {
+  const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  const [f, t] = p.range()
+  pickFrom.value = iso(f)
+  pickTo.value = iso(t)
+}
+
 function applyCustomRange() {
   if (!pickFrom.value || !pickTo.value) return
   const [from, to] = pickFrom.value <= pickTo.value ? [pickFrom.value, pickTo.value] : [pickTo.value, pickFrom.value]
@@ -536,6 +550,17 @@ async function logout() {
       <div v-if="pickingRange" class="fixed inset-0 z-50 grid place-items-center bg-black/25 p-6" @click.self="pickingRange = false" @keydown.esc="pickingRange = false">
         <form class="w-full max-w-xs rounded-[14px] bg-[var(--surface)] p-5 shadow-2xl" @submit.prevent="applyCustomRange">
           <h2 class="mb-4 text-sm font-semibold">Custom range</h2>
+          <div class="mb-4 flex flex-wrap gap-1.5">
+            <button
+              v-for="p in RANGE_PRESETS"
+              :key="p.label"
+              type="button"
+              class="rounded-full bg-[var(--bg)] px-3 py-1 text-xs text-[var(--ink-2)] hover:text-[var(--ink)]"
+              @click="applyPresetChip(p)"
+            >
+              {{ p.label }}
+            </button>
+          </div>
           <label class="mb-1 block text-xs text-[var(--ink-3)]" for="range-from">From</label>
           <input
             id="range-from"
