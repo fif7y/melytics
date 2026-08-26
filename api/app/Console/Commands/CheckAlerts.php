@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Mail\TrafficAlert;
 use App\Models\Annotation;
 use App\Models\Site;
 use App\Services\Stats;
@@ -25,7 +26,7 @@ class CheckAlerts extends Command
 
     private const MIN_HOUR = 6; // no verdicts before 6am site-local
 
-    public function handle(): int
+    public function handle(Stats $stats): int
     {
         foreach (Site::all() as $site) {
             $now = now($site->timezone);
@@ -62,10 +63,16 @@ class CheckAlerts extends Command
             $text = "⚠ Traffic {$kind}: {$today} visitors by {$now->format('H:i')}, ~{$median} typical";
             $site->annotations()->create(['day' => $day, 'text' => $text]);
 
-            Mail::raw(
-                "{$site->domain} — {$text}.\n\nCompared to the median of the same window over the last 7 days.\n\nhttps://stats.{$site->domain}/",
-                fn ($m) => $m->to($site->user->email)->subject("[melytics] Traffic {$kind} on {$site->domain}")
-            );
+            $dayStart = $now->copy()->startOfDay();
+            Mail::to($site->user->email)->send(new TrafficAlert(
+                $site,
+                $kind,
+                $today,
+                $median,
+                $now->format('H:i'),
+                $stats->breakdown($site, 'page', $dayStart, $now, 5)->all(),
+                $stats->breakdown($site, 'referrer', $dayStart, $now, 5)->all(),
+            ));
             $this->info("{$site->domain}: {$kind} alert sent ({$today} vs ~{$median})");
         }
 
