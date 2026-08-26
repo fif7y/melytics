@@ -73,7 +73,7 @@ const PANELS: { key: string; title: string; inert?: boolean }[] = [
 const MODULES = [
   { key: 'live', label: 'Live pages' },
   { key: 'vitals', label: 'Web Vitals' },
-  { key: 'retention', label: 'Retention' },
+  { key: 'retention', label: 'Retention', tier2: true },
   { key: 'goals', label: 'Goals' },
   { key: 'funnels', label: 'Funnels' },
   ...PANELS.map((p) => ({ key: p.key, label: p.title })),

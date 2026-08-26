@@ -1,15 +1,20 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
 export interface ModuleDef {
   key: string
   label: string
+  tier2?: boolean
 }
 
 const props = defineProps<{ modules: ModuleDef[]; hidden: string[]; density: 'comfy' | 'compact'; tier2: boolean }>()
 const emit = defineEmits<{ toggle: [key: string]; density: [d: 'comfy' | 'compact']; tier2: [on: boolean]; signout: [] }>()
 
 const open = ref(false)
+
+// Tier-2-dependent modules group at the bottom so the dependency is visible
+const baseModules = computed(() => props.modules.filter((m) => !m.tier2))
+const tier2Modules = computed(() => props.modules.filter((m) => m.tier2))
 
 function onKey(e: KeyboardEvent) {
   if (e.key === 'Escape') open.value = false
@@ -60,7 +65,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey))
           <section>
             <div class="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--ink-3)]">Modules</div>
             <label
-              v-for="m in props.modules"
+              v-for="m in baseModules"
               :key="m.key"
               class="flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2 text-sm hover:bg-[var(--bg)]"
             >
@@ -72,6 +77,23 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey))
               />
               {{ m.label }}
             </label>
+            <template v-if="tier2Modules.length">
+              <div class="mt-3 mb-1 px-2 text-xs text-[var(--ink-3)]">Needs Tier-2 tracking</div>
+              <label
+                v-for="m in tier2Modules"
+                :key="m.key"
+                class="flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2 text-sm hover:bg-[var(--bg)]"
+                :class="{ 'opacity-50': !props.tier2 }"
+              >
+                <input
+                  type="checkbox"
+                  class="accent-[var(--accent)]"
+                  :checked="!props.hidden.includes(m.key)"
+                  @change="emit('toggle', m.key)"
+                />
+                {{ m.label }}
+              </label>
+            </template>
             <p class="mt-1 px-2 text-xs text-[var(--ink-3)]">Hidden modules aren't fetched at all.</p>
           </section>
 
