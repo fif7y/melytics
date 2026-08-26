@@ -128,8 +128,12 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey))
               Tier-2 tracking
             </label>
             <p class="mt-1 px-2 text-xs text-[var(--ink-3)]">
-              Stores a persistent visitor id for consented visitors only (your site must call
-              <code class="rounded bg-[var(--bg)] px-1">melytics.consent(true)</code>). Powers the Retention module.
+              Standard tracking is cookieless: visitors are anonymous and forgotten daily, so
+              nobody can be recognized across days. Tier-2 stores a random id in the browser of
+              visitors who explicitly accept — your consent banner calls
+              <code class="rounded bg-[var(--bg)] px-1">melytics.consent(true)</code> — which lets
+              return visits be counted. Powers the audience modules: Retention, Cohorts, Loyalty,
+              Attribution, and Time to convert. Everyone else stays fully anonymous.
             </p>
           </section>
         </div>
