@@ -128,9 +128,9 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey))
               Tier-2 tracking
             </label>
             <p class="mt-1 px-2 text-xs text-[var(--ink-3)]">
-              Standard tracking forgets visitors daily. Tier-2 remembers the ones who accept via
-              <code class="rounded bg-[var(--bg)] px-1">melytics.consent(true)</code>, unlocking the
-              audience modules. Everyone else stays anonymous.
+              Standard tracking forgets visitors daily. Tier-2 remembers users who accept via a
+              consent banner - <code class="rounded bg-[var(--bg)] px-1">melytics.consent(true)</code>,
+              unlocking the audience modules. Everyone else stays anonymous.
             </p>
           </section>
         </div>
