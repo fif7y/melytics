@@ -14,7 +14,7 @@ export interface FunnelRow {
 }
 
 const props = defineProps<{ siteId: number; funnels: FunnelRow[] }>()
-const emit = defineEmits<{ changed: [] }>()
+const emit = defineEmits<{ changed: []; assist: [] }>()
 
 const adding = ref(false)
 const name = ref('')
@@ -61,9 +61,12 @@ async function remove(id: number) {
 
 <template>
   <section class="card p-5">
-    <div class="flex items-center mb-4">
+    <div class="flex items-center gap-3 mb-4">
       <h3 class="text-sm font-medium text-[var(--ink-2)]">Funnels</h3>
-      <button class="ml-auto text-sm text-[var(--accent)]" @click="adding = !adding">
+      <button class="ml-auto text-sm text-[var(--ink-3)] hover:text-[var(--ink)]" title="Open the setup assistant" @click="emit('assist')">
+        Assistant
+      </button>
+      <button class="text-sm text-[var(--accent)]" @click="adding = !adding">
         {{ adding ? 'Cancel' : 'Add funnel' }}
       </button>
     </div>

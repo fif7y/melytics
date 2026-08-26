@@ -10,9 +10,10 @@ const open = ref(false)
 const step = ref(0)
 const dir = ref<1 | -1>(1)
 defineExpose({
-  show() {
+  // Enterable at any step: 0 welcome (header), 1 goals (Goals card), 2 funnel (Funnels card)
+  show(at = 0) {
     open.value = true
-    step.value = 0
+    step.value = at
     done.value = false
   },
 })

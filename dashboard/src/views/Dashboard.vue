@@ -522,8 +522,8 @@ async function logout() {
       </section>
 
       <div v-if="show('goals') || show('funnels')" class="grid gap-5 lg:grid-cols-2">
-        <GoalsCard v-if="show('goals')" class="h-full" :site-id="siteId" :goals="goals" :targets="targets" @changed="load" @assist="wizard?.show()" />
-        <FunnelsCard v-if="show('funnels')" class="h-full" :site-id="siteId" :funnels="funnels" @changed="load" />
+        <GoalsCard v-if="show('goals')" class="h-full" :site-id="siteId" :goals="goals" :targets="targets" @changed="load" @assist="wizard?.show(goals.length ? 1 : 0)" />
+        <FunnelsCard v-if="show('funnels')" class="h-full" :site-id="siteId" :funnels="funnels" @changed="load" @assist="wizard?.show(2)" />
       </div>
 
       <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
