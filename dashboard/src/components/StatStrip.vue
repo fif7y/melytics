@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import type { Stats } from '../lib/api'
 
 const props = defineProps<{
@@ -87,17 +87,62 @@ const tiles = computed(() => {
   }
   return out
 })
+
+// Drag-to-reorder, persisted like the breakdown grid
+const ORDER_KEY = 'melytics_stat_order'
+const order = ref<string[]>(
+  (() => {
+    try {
+      return JSON.parse(localStorage.getItem(ORDER_KEY) ?? '[]')
+    } catch {
+      return []
+    }
+  })()
+)
+const dragKey = ref<string | null>(null)
+const overKey = ref<string | null>(null)
+
+const orderedTiles = computed(() => {
+  const idx = (k: string) => {
+    const i = order.value.indexOf(k)
+    return i === -1 ? 100 + tiles.value.findIndex((t) => t.key === k) : i
+  }
+  return tiles.value.slice().sort((a, b) => idx(a.key) - idx(b.key))
+})
+
+function dropOn(target: string) {
+  if (!dragKey.value || dragKey.value === target) return
+  const keys = orderedTiles.value.map((t) => t.key)
+  keys.splice(keys.indexOf(target), 0, ...keys.splice(keys.indexOf(dragKey.value), 1))
+  order.value = keys
+  try {
+    localStorage.setItem(ORDER_KEY, JSON.stringify(keys))
+  } catch {}
+  dragKey.value = null
+  overKey.value = null
+}
 </script>
 
 <template>
   <div class="grid gap-4" :style="{ gridTemplateColumns: `repeat(auto-fit, minmax(9rem, 1fr))` }">
     <component
       :is="t.metric ? 'button' : 'div'"
-      v-for="t in tiles"
+      v-for="t in orderedTiles"
       :key="t.key"
+      draggable="true"
       class="card px-4 pt-3.5 text-left transition-opacity"
-      :class="[t.metric ? 'cursor-pointer' : '', t.spark ? 'pb-2' : 'pb-3.5', t.metric && metric !== t.metric ? 'opacity-55 hover:opacity-80' : '']"
+      :class="[
+        t.metric ? 'cursor-pointer' : '',
+        t.spark ? 'pb-2' : 'pb-3.5',
+        t.metric && metric !== t.metric ? 'opacity-55 hover:opacity-80' : '',
+        { 'opacity-40': dragKey === t.key, 'ring-2 ring-[var(--accent)]': overKey === t.key && dragKey && dragKey !== t.key },
+      ]"
       @click="t.metric && emit('update:metric', t.metric)"
+      @dragstart="dragKey = t.key"
+      @dragend=";(dragKey = null), (overKey = null)"
+      @dragover.prevent="overKey = t.key"
+      @dragleave="overKey === t.key && (overKey = null)"
+      @drop.prevent="dropOn(t.key)"
     >
       <div class="flex items-center gap-1.5 text-xs text-[var(--ink-3)]">
         <span v-if="t.liveDot" class="h-2 w-2 rounded-full bg-[var(--up)]" :class="{ 'animate-pulse': live && live > 0 }" />
