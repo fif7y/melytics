@@ -434,7 +434,7 @@ async function logout() {
           aria-label="Setup assistant"
           @click="wizard?.show()"
         >
-          <span class="text-[15px] leading-none" aria-hidden="true">✦</span>
+          <span class="text-[20px] leading-none" aria-hidden="true">✦</span>
         </button>
 
         <button
