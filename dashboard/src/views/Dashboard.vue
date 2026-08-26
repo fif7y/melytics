@@ -46,6 +46,9 @@ const PANELS: { key: string; title: string; inert?: boolean }[] = [
   { key: 'entry_page', title: 'Entry pages', inert: true },
   { key: 'exit_page', title: 'Exit pages', inert: true },
   { key: 'referrer', title: 'Referrers' },
+  { key: 'channel', title: 'Channels', inert: true },
+  { key: 'utm_source', title: 'Sources' },
+  { key: 'utm_medium', title: 'Mediums' },
   { key: 'country', title: 'Countries' },
   { key: 'device', title: 'Devices' },
   { key: 'browser', title: 'Browsers' },
@@ -140,7 +143,9 @@ const delta = computed(() => {
 function rangeParams() {
   const to = new Date()
   const from = new Date(Date.now() - (rangeDays.value - 1) * 86400_000)
-  const iso = (d: Date) => d.toISOString().slice(0, 10)
+  // local calendar date, not toISOString (which is UTC and flips the day in the evening)
+  const iso = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
   return `from=${iso(from)}&to=${iso(to)}`
 }
 

@@ -40,7 +40,8 @@ function auth(): string {
 }
 
 function rangeParams() {
-  const iso = (d: Date) => d.toISOString().slice(0, 10)
+  const iso = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
   const from = new Date(Date.now() - (rangeDays.value - 1) * 86400_000)
   return `from=${iso(from)}&to=${iso(new Date())}&auth=${auth()}`
 }

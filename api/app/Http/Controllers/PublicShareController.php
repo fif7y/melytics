@@ -37,7 +37,7 @@ class PublicShareController extends Controller
     public function stats(Request $request, string $token): JsonResponse
     {
         $link = $this->authorize($request, $token);
-        [$from, $to, $interval] = $this->stats->range($request->query('from'), $request->query('to'), $request->query('interval'));
+        [$from, $to, $interval] = $this->stats->range($request->query('from'), $request->query('to'), $request->query('interval'), $link->site->timezone);
 
         return response()->json(
             $this->stats->overview($link->site, $from, $to, $interval)
@@ -51,7 +51,7 @@ class PublicShareController extends Controller
         $dimension = $request->validate([
             'dimension' => 'required|in:page,referrer,country,device,browser,os,utm_source,utm_medium,utm_campaign,event',
         ])['dimension'];
-        [$from, $to] = $this->stats->range($request->query('from'), $request->query('to'));
+        [$from, $to] = $this->stats->range($request->query('from'), $request->query('to'), null, $link->site->timezone);
 
         return response()->json([
             'dimension' => $dimension,

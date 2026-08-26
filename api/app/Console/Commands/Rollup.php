@@ -32,9 +32,15 @@ class Rollup extends Command
         $hours = (int) $this->option('hours');
         $from = now()->subHours($hours)->startOfHour();
 
-        foreach (Site::pluck('id') as $siteId) {
-            $this->rollupPeriod($siteId, 'rollup_hourly', 'ts', "strftime('%Y-%m-%d %H:00:00', created_at)", $from);
-            $this->rollupPeriod($siteId, 'rollup_daily', 'day', "date(created_at)", $from->copy()->startOfDay());
+        // Rollup keys are site-local time (per-site offset, sampled now — historic
+        // DST edges may mis-bucket an hour, acceptable), so days flip at the
+        // site's midnight rather than UTC's.
+        foreach (Site::all(['id', 'timezone']) as $site) {
+            $offset = Stats::tzOffset($site->timezone ?? 'UTC');
+            $this->rollupPeriod($site->id, 'rollup_hourly', 'ts', 'hour', $offset, $from);
+            // daily scan starts at the SITE-LOCAL day start containing $from, as a UTC instant
+            $dayFrom = $from->copy()->addMinutes($offset)->startOfDay()->subMinutes($offset);
+            $this->rollupPeriod($site->id, 'rollup_daily', 'day', 'day', $offset, $dayFrom);
         }
 
         $this->info('Rollups updated from '.$from->toDateTimeString());
@@ -42,16 +48,15 @@ class Rollup extends Command
         return self::SUCCESS;
     }
 
-    private function rollupPeriod(int $siteId, string $table, string $periodCol, string $sqlitePeriodExpr, $from): void
+    private function rollupPeriod(int $siteId, string $table, string $periodCol, string $grain, int $offset, $from): void
     {
-        $driver = DB::connection()->getDriverName();
-        $periodExpr = $driver === 'mysql'
-            ? ($periodCol === 'ts' ? "DATE_FORMAT(created_at, '%Y-%m-%d %H:00:00')" : 'DATE(created_at)')
-            : $sqlitePeriodExpr;
+        $periodExpr = Stats::periodExpr('created_at', $grain, $offset);
 
-        // The period column stores a date string for daily rows; comparing it
-        // against a full datetime silently skips them (string comparison).
-        $periodFrom = $periodCol === 'day' ? $from->toDateString() : $from->toDateTimeString();
+        // The period column stores site-local labels; the delete boundary must be
+        // the site-local label of $from. Daily rows store a date string — comparing
+        // it against a full datetime silently skips them (string comparison).
+        $localFrom = $from->copy()->addMinutes($offset);
+        $periodFrom = $periodCol === 'day' ? $localFrom->toDateString() : $localFrom->toDateTimeString();
 
         DB::transaction(function () use ($siteId, $table, $periodCol, $periodExpr, $from, $periodFrom) {
             DB::table($table)

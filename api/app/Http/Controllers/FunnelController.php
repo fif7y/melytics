@@ -15,7 +15,7 @@ class FunnelController extends Controller
     public function index(Request $request, Site $site): JsonResponse
     {
         $this->authorizeSite($request, $site);
-        [$from, $to] = $this->stats->range($request->query('from'), $request->query('to'));
+        [$from, $to] = $this->stats->range($request->query('from'), $request->query('to'), null, $site->timezone);
 
         return response()->json([
             'funnels' => $site->funnels->map(fn (Funnel $f) => [

@@ -23,6 +23,30 @@ class Stats
         'event' => 'event',
     ];
 
+    /** Referrer-host needles per channel; AI before Search so gemini.google.com lands in AI. */
+    private const CHANNEL_HOSTS = [
+        'AI' => ['chatgpt.com', 'chat.openai.com', 'perplexity.ai', 'claude.ai', 'gemini.google.com', 'copilot.microsoft.com', 'you.com', 'phind.com', 'poe.com'],
+        'Search' => ['google.', 'bing.com', 'duckduckgo.com', 'search.yahoo.com', 'ecosia.org', 'search.brave.com', 'startpage.com', 'baidu.com', 'yandex.'],
+        'Social' => ['twitter.com', 'x.com', 't.co', 'facebook.com', 'fb.com', 'instagram.com', 'linkedin.com', 'reddit.com', 'news.ycombinator.com', 'lobste.rs', 'threads.net', 'bsky.app', 'mastodon', 'tiktok.com', 'youtube.com', 'pinterest.'],
+        'Email' => ['mail.google.com', 'outlook.live.com', 'mail.yahoo.com', 'mail.proton.me'],
+    ];
+
+    public static function channel(?string $host): string
+    {
+        if (! $host) {
+            return 'Direct';
+        }
+        foreach (self::CHANNEL_HOSTS as $channel => $needles) {
+            foreach ($needles as $needle) {
+                if (str_contains($host, $needle)) {
+                    return $channel;
+                }
+            }
+        }
+
+        return 'Referral';
+    }
+
     /** Breakdown dimensions derived from internal events rather than hit columns. */
     public const EVENT_DIMENSIONS = [
         'outbound' => '__outbound',
@@ -78,9 +102,11 @@ class Stats
         $prevFrom = $from->copy()->subDays($days);
         $prevTo = $from->copy()->subDay();
 
+        $off = self::tzOffset($site->timezone);
+
         return [
-            'series' => $this->series($site->id, $from, $to, $interval, $filter),
-            'previous_series' => $this->series($site->id, $prevFrom, $prevTo, $interval, $filter),
+            'series' => $this->series($site->id, $from, $to, $interval, $filter, $off),
+            'previous_series' => $this->series($site->id, $prevFrom, $prevTo, $interval, $filter, $off),
             'totals' => $this->totals($site->id, $from, $to, $filter),
             'previous_totals' => $this->totals($site->id, $prevFrom, $prevTo, $filter),
             'range' => ['from' => $from->toDateString(), 'to' => $to->toDateString(), 'interval' => $interval],
@@ -90,6 +116,9 @@ class Stats
     /** @param array{dimension: string, value: string}|null $filter */
     public function breakdown(Site $site, string $dimension, Carbon $from, Carbon $to, int $limit = 20, ?array $filter = null)
     {
+        if ($dimension === 'channel') {
+            return $this->channelBreakdown($site, $from, $to, $filter);
+        }
         if ($filter) {
             if (in_array($dimension, ['entry_page', 'exit_page'], true)) {
                 return $this->filteredSessionBreakdown($site->id, $dimension, $from, $to, $limit, $filter);
@@ -133,6 +162,41 @@ class Stats
             ->get();
     }
 
+    /** Traffic grouped into Direct / Search / Social / AI / Email / Referral by referrer host. */
+    private function channelBreakdown(Site $site, Carbon $from, Carbon $to, ?array $filter)
+    {
+        if ($filter) {
+            $q = $this->filteredHits($site->id, $from, $to, $filter);
+            if ($filter['dimension'] !== 'event') {
+                $q->whereNull('event');
+            }
+            $rows = $q->groupBy('referrer_host')
+                ->selectRaw('referrer_host as value, COUNT(*) as pageviews, COUNT(DISTINCT visitor_hash) as visitors')
+                ->get();
+        } else {
+            // referrer rollup including the '' rows — those are direct traffic
+            $rows = DB::table('rollup_daily')
+                ->where('site_id', $site->id)
+                ->whereBetween('day', [$from->toDateString(), $to->toDateString()])
+                ->where('dimension', 'referrer')
+                ->groupBy('value')
+                ->selectRaw('value, SUM(pageviews) as pageviews, SUM(visitors) as visitors')
+                ->get();
+        }
+
+        $out = [];
+        foreach ($rows as $r) {
+            $c = self::channel($r->value ?: null);
+            $out[$c] = [
+                'value' => $c,
+                'pageviews' => ($out[$c]['pageviews'] ?? 0) + $r->pageviews,
+                'visitors' => ($out[$c]['visitors'] ?? 0) + $r->visitors,
+            ];
+        }
+
+        return collect(array_values($out))->sortByDesc('pageviews')->values();
+    }
+
     /** JSON url extractor for __outbound / __download event props, per driver. */
     private function jsonUrlExpr(): string
     {
@@ -155,11 +219,17 @@ class Stats
             FROM sp GROUP BY $col ORDER BY COUNT(*) DESC LIMIT $limit",
             [
                 'site' => $siteId,
-                'lookback' => $from->toDateTimeString(),
-                'to' => $to->copy()->endOfDay()->toDateTimeString(),
+                'lookback' => $from->copy()->utc()->toDateTimeString(),
+                'to' => $to->copy()->endOfDay()->utc()->toDateTimeString(),
                 'fval' => $filter['value'],
             ]
         ));
+    }
+
+    /** Range bounds as UTC instants — hits.created_at is stored in UTC. */
+    private static function utcBounds(Carbon $from, Carbon $to): array
+    {
+        return [$from->copy()->utc(), $to->copy()->endOfDay()->utc()];
     }
 
     /** Raw-hits base query for a cross-filter (rollups are per-dimension, so filtered stats must scan hits). */
@@ -167,7 +237,7 @@ class Stats
     {
         return DB::table('hits')
             ->where('site_id', $siteId)
-            ->whereBetween('created_at', [$from, $to->copy()->endOfDay()])
+            ->whereBetween('created_at', self::utcBounds($from, $to))
             ->where(self::FILTERABLE[$filter['dimension']], $filter['value']);
     }
 
@@ -178,7 +248,7 @@ class Stats
 
         return $site->goals->map(function (Goal $goal) use ($site, $from, $to, $visitors) {
             $q = DB::table('hits')->where('site_id', $site->id)
-                ->whereBetween('created_at', [$from, $to->copy()->endOfDay()]);
+                ->whereBetween('created_at', self::utcBounds($from, $to));
             if ($goal->event) {
                 $q->where('event', $goal->event);
             } else {
@@ -214,7 +284,7 @@ class Stats
 
         foreach ($steps as $i => $step) {
             $q = DB::table('hits')->where('site_id', $site->id)
-                ->whereBetween('created_at', [$from, $to->copy()->endOfDay()]);
+                ->whereBetween('created_at', self::utcBounds($from, $to));
             if (! empty($step['event'])) {
                 $q->where('event', $step['event']);
             } else {
@@ -253,7 +323,7 @@ class Stats
         $rows = DB::table('hits')
             ->where('site_id', $site->id)
             ->where('event', '__vitals')
-            ->whereBetween('created_at', [$from, $to->copy()->endOfDay()])
+            ->whereBetween('created_at', self::utcBounds($from, $to))
             ->pluck('event_props');
 
         $metrics = ['lcp' => [], 'cls' => [], 'inp' => [], 'ttfb' => []];
@@ -293,14 +363,14 @@ class Stats
     {
         $ids = DB::table('hits')
             ->where('site_id', $site->id)
-            ->whereBetween('created_at', [$from, $to->copy()->endOfDay()])
+            ->whereBetween('created_at', self::utcBounds($from, $to))
             ->whereNotNull('visitor_id')
             ->distinct()
             ->pluck('visitor_id');
 
         $returning = $ids->isEmpty() ? 0 : DB::table('hits')
             ->where('site_id', $site->id)
-            ->where('created_at', '<', $from)
+            ->where('created_at', '<', $from->copy()->utc())
             ->whereIn('visitor_id', $ids)
             ->distinct()
             ->count('visitor_id');
@@ -313,13 +383,10 @@ class Stats
     }
 
     /** @param array{dimension: string, value: string}|null $filter */
-    public function series(int $siteId, Carbon $from, Carbon $to, string $interval, ?array $filter = null)
+    public function series(int $siteId, Carbon $from, Carbon $to, string $interval, ?array $filter = null, int $offsetMin = 0)
     {
         if ($filter) {
-            $driver = DB::connection()->getDriverName();
-            $expr = $interval === 'hour'
-                ? ($driver === 'mysql' ? "DATE_FORMAT(created_at, '%Y-%m-%d %H:00:00')" : "strftime('%Y-%m-%d %H:00:00', created_at)")
-                : ($driver === 'mysql' ? 'DATE(created_at)' : 'date(created_at)');
+            $expr = self::periodExpr('created_at', $interval, $offsetMin);
 
             $q = $this->filteredHits($siteId, $from, $to, $filter);
             if ($filter['dimension'] !== 'event') {
@@ -399,8 +466,8 @@ class Stats
             FROM sp",
             [
                 'site' => $siteId,
-                'lookback' => $from->toDateTimeString(),
-                'to' => $to->copy()->endOfDay()->toDateTimeString(),
+                'lookback' => $from->copy()->utc()->toDateTimeString(),
+                'to' => $to->copy()->endOfDay()->utc()->toDateTimeString(),
                 'fval' => $filter['value'],
             ]
         );
@@ -408,12 +475,37 @@ class Stats
         return self::sessionMetrics((int) $row->s, (int) $row->b, (int) $row->d);
     }
 
-    /** @return array{0: Carbon, 1: Carbon, 2: string} */
-    public function range(?string $from, ?string $to, ?string $interval = null): array
+    /**
+     * Date params are interpreted in the site's timezone — rollups are keyed by
+     * site-local time, so "today" flips at the site's midnight, not UTC's.
+     *
+     * @return array{0: Carbon, 1: Carbon, 2: string}
+     */
+    public function range(?string $from, ?string $to, ?string $interval = null, string $tz = 'UTC'): array
     {
-        $toC = Carbon::parse($to ?? now()->toDateString())->startOfDay();
-        $fromC = Carbon::parse($from ?? now()->subDays(29)->toDateString())->startOfDay();
+        $toC = Carbon::parse($to ?? now($tz)->toDateString(), $tz)->startOfDay();
+        $fromC = Carbon::parse($from ?? now($tz)->subDays(29)->toDateString(), $tz)->startOfDay();
 
         return [$fromC, $toC, $interval ?? ($fromC->diffInDays($toC) <= 2 ? 'hour' : 'day')];
+    }
+
+    /** Site-local offset from UTC in minutes, as of now (rollup bucketing uses the same). */
+    public static function tzOffset(string $tz): int
+    {
+        return now($tz)->utcOffset();
+    }
+
+    /** Period expression bucketing a UTC datetime column into site-local time. */
+    public static function periodExpr(string $column, string $grain, int $offsetMin): string
+    {
+        $driver = DB::connection()->getDriverName();
+        $shifted = $offsetMin === 0 ? $column
+            : ($driver === 'mysql'
+                ? "DATE_ADD($column, INTERVAL $offsetMin MINUTE)"
+                : "datetime($column, '$offsetMin minutes')");
+
+        return $grain === 'hour'
+            ? ($driver === 'mysql' ? "DATE_FORMAT($shifted, '%Y-%m-%d %H:00:00')" : "strftime('%Y-%m-%d %H:00:00', $shifted)")
+            : ($driver === 'mysql' ? "DATE($shifted)" : "date($shifted)");
     }
 }

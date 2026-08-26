@@ -15,7 +15,7 @@ class StatsController extends Controller
     public function stats(Request $request, Site $site): JsonResponse
     {
         $this->authorizeSite($request, $site);
-        [$from, $to, $interval] = $this->stats->range($request->query('from'), $request->query('to'), $request->query('interval'));
+        [$from, $to, $interval] = $this->stats->range($request->query('from'), $request->query('to'), $request->query('interval'), $site->timezone);
 
         return response()->json($this->stats->overview($site, $from, $to, $interval, $this->filterParam($request)));
     }
@@ -37,9 +37,9 @@ class StatsController extends Controller
     {
         $this->authorizeSite($request, $site);
         $dimension = $request->validate([
-            'dimension' => 'required|in:page,referrer,country,device,browser,os,utm_source,utm_medium,utm_campaign,event,entry_page,exit_page,outbound,download,not_found',
+            'dimension' => 'required|in:page,referrer,country,device,browser,os,utm_source,utm_medium,utm_campaign,event,entry_page,exit_page,outbound,download,not_found,channel',
         ])['dimension'];
-        [$from, $to] = $this->stats->range($request->query('from'), $request->query('to'));
+        [$from, $to] = $this->stats->range($request->query('from'), $request->query('to'), null, $site->timezone);
         $limit = min((int) $request->query('limit', 20), 100);
 
         return response()->json([
@@ -51,7 +51,7 @@ class StatsController extends Controller
     public function goals(Request $request, Site $site): JsonResponse
     {
         $this->authorizeSite($request, $site);
-        [$from, $to] = $this->stats->range($request->query('from'), $request->query('to'));
+        [$from, $to] = $this->stats->range($request->query('from'), $request->query('to'), null, $site->timezone);
 
         return response()->json(['goals' => $this->stats->goals($site, $from, $to)]);
     }
@@ -59,7 +59,7 @@ class StatsController extends Controller
     public function vitals(Request $request, Site $site): JsonResponse
     {
         $this->authorizeSite($request, $site);
-        [$from, $to] = $this->stats->range($request->query('from'), $request->query('to'));
+        [$from, $to] = $this->stats->range($request->query('from'), $request->query('to'), null, $site->timezone);
 
         return response()->json($this->stats->vitals($site, $from, $to));
     }
@@ -67,7 +67,7 @@ class StatsController extends Controller
     public function retention(Request $request, Site $site): JsonResponse
     {
         $this->authorizeSite($request, $site);
-        [$from, $to] = $this->stats->range($request->query('from'), $request->query('to'));
+        [$from, $to] = $this->stats->range($request->query('from'), $request->query('to'), null, $site->timezone);
 
         return response()->json($this->stats->retention($site, $from, $to));
     }
