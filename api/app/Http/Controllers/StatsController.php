@@ -82,15 +82,22 @@ class StatsController extends Controller
             ->where('created_at', '>=', $since)
             ->distinct()
             ->count('visitor_hash');
-        $pages = DB::table('hits')
-            ->where('site_id', $site->id)
-            ->where('created_at', '>=', $since)
-            // pageviews plus heartbeat pings, so idle-but-present visitors keep their page listed
-            ->where(fn ($q) => $q->whereNull('event')->orWhere('event', '__ping'))
+        // Each visitor counts only on the page of their latest hit (pageview or
+        // heartbeat ping), so this matches the visitor count instead of listing
+        // every page they crossed in the window.
+        $pages = DB::table(
+            DB::table('hits')
+                ->where('site_id', $site->id)
+                ->where('created_at', '>=', $since)
+                ->where(fn ($q) => $q->whereNull('event')->orWhere('event', '__ping'))
+                ->groupBy('visitor_hash')
+                ->selectRaw('visitor_hash, path, MAX(id)'), // SQLite: bare columns follow the MAX row
+            'latest'
+        )
             ->groupBy('path')
-            ->orderByRaw('COUNT(DISTINCT visitor_hash) DESC')
+            ->orderByRaw('COUNT(*) DESC')
             ->limit(10)
-            ->selectRaw('path, COUNT(DISTINCT visitor_hash) as visitors')
+            ->selectRaw('path, COUNT(*) as visitors')
             ->get();
 
         return response()->json(['visitors' => $visitors, 'pages' => $pages]);
