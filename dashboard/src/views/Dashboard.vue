@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api, setToken, type Annotation, type BreakdownRow, type Site, type Stats } from '../lib/api'
 import TimeChart from '../components/TimeChart.vue'
-import BreakdownCard from '../components/BreakdownCard.vue'
+import BreakdownPanel from '../components/BreakdownPanel.vue'
 import GoalsCard, { type GoalRow } from '../components/GoalsCard.vue'
 import FunnelsCard, { type FunnelRow } from '../components/FunnelsCard.vue'
 import VitalsCard, { type Vitals } from '../components/VitalsCard.vue'
@@ -286,16 +286,13 @@ async function logout() {
         <FunnelsCard v-if="show('funnels')" :site-id="siteId" :funnels="funnels" @changed="load" />
       </div>
 
-      <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-        <BreakdownCard
-          v-for="p in PANELS.filter((p) => show(p.key))"
-          :key="p.key"
-          :title="p.title"
-          :rows="breakdowns[p.key] ?? []"
-          :selected="filter?.dim === p.key ? filter.value : null"
-          @select="(v) => setFilter(p.key, v)"
-        />
-      </div>
+      <BreakdownPanel
+        v-if="PANELS.some((p) => show(p.key))"
+        :breakdowns="breakdowns"
+        :visible="PANELS.filter((p) => show(p.key)).map((p) => p.key)"
+        :selected="filter"
+        @select="setFilter"
+      />
     </main>
 
     <p v-else-if="loading" class="text-[var(--ink-3)]">Loading…</p>
