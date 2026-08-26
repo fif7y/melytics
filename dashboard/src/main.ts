@@ -6,6 +6,9 @@ import Login from './views/Login.vue'
 import Dashboard from './views/Dashboard.vue'
 import Share from './views/Share.vue'
 import { token } from './lib/api'
+import { applyTheme } from './lib/theme'
+
+applyTheme()
 
 const router = createRouter({
   history: createWebHashHistory(),
