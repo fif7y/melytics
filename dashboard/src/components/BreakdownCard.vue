@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import type { BreakdownRow } from '../lib/api'
 
-const props = defineProps<{ title: string; rows: BreakdownRow[]; empty?: string; selected?: string | null; dim?: string; clickable?: boolean }>()
+const props = defineProps<{ title: string; rows: BreakdownRow[]; empty?: string; selected?: string | null; dim?: string; clickable?: boolean; live?: boolean }>()
 const emit = defineEmits<{ select: [value: string] }>()
 
 const max = computed(() => Math.max(...props.rows.map((r) => r.pageviews), 1))
@@ -28,7 +28,10 @@ function display(row: BreakdownRow) {
 
 <template>
   <section class="card p-5">
-    <h3 class="text-sm font-medium text-[var(--ink-2)] mb-4">{{ title }}</h3>
+    <h3 class="flex items-center gap-2 text-sm font-medium text-[var(--ink-2)] mb-4">
+      <span v-if="live" class="h-2 w-2 rounded-full bg-[var(--up)]" :class="{ 'animate-pulse': rows.length }" />
+      {{ title }}
+    </h3>
     <p v-if="!rows.length" class="text-sm text-[var(--ink-3)]">{{ empty ?? 'No data yet' }}</p>
     <ul class="space-y-1.5">
       <li

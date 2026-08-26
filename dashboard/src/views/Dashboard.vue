@@ -28,6 +28,7 @@ const noteDay = ref(new Date().toISOString().slice(0, 10))
 const noteText = ref('')
 const breakdowns = ref<Record<string, BreakdownRow[]>>({})
 const live = ref<number | null>(null)
+const livePages = ref<BreakdownRow[]>([])
 const metric = ref<'visitors' | 'pageviews'>('visitors')
 const rangeDays = ref(30)
 const filter = ref<{ dim: string; value: string } | null>(null)
@@ -50,6 +51,7 @@ const PANELS = [
 ]
 
 const MODULES = [
+  { key: 'live', label: 'Live pages' },
   { key: 'vitals', label: 'Web Vitals' },
   { key: 'retention', label: 'Retention' },
   { key: 'goals', label: 'Goals' },
@@ -80,7 +82,7 @@ const order = ref<string[]>(
   })()
 )
 // Vitals lives in the same reorderable grid as the breakdowns
-const GRID_ITEMS = [{ key: 'vitals', title: 'Web Vitals' }, { key: 'retention', title: 'Retention' }, ...PANELS]
+const GRID_ITEMS = [{ key: 'live', title: 'Live' }, { key: 'vitals', title: 'Web Vitals' }, { key: 'retention', title: 'Retention' }, ...PANELS]
 const orderedPanels = computed(() => {
   const idx = (k: string) => {
     const i = order.value.indexOf(k)
@@ -179,7 +181,9 @@ async function load() {
 async function pollLive() {
   if (!siteId.value) return
   try {
-    live.value = (await api<{ visitors: number }>(`/sites/${siteId.value}/live`)).visitors
+    const r = await api<{ visitors: number; pages: { path: string; visitors: number }[] }>(`/sites/${siteId.value}/live`)
+    live.value = r.visitors
+    livePages.value = r.pages.map((p) => ({ value: p.path, pageviews: p.visitors, visitors: p.visitors }))
   } catch {}
 }
 
@@ -363,7 +367,15 @@ async function logout() {
           @dragleave="overKey === p.key && (overKey = null)"
           @drop.prevent="dropOn(p.key)"
         >
-          <VitalsCard v-if="p.key === 'vitals' && vitals" class="h-full" :vitals="vitals" />
+          <BreakdownCard
+            v-if="p.key === 'live'"
+            class="h-full"
+            title="Live"
+            live
+            :rows="livePages"
+            empty="No one on the site right now"
+          />
+          <VitalsCard v-else-if="p.key === 'vitals' && vitals" class="h-full" :vitals="vitals" />
           <RetentionCard
             v-else-if="p.key === 'retention' && retention"
             class="h-full"
@@ -371,7 +383,7 @@ async function logout() {
             :tier2-enabled="site?.tier2_enabled ?? false"
           />
           <BreakdownCard
-            v-else-if="p.key !== 'vitals' && p.key !== 'retention'"
+            v-else-if="p.key !== 'vitals' && p.key !== 'retention' && p.key !== 'live'"
             class="h-full"
             :title="p.title"
             :rows="breakdowns[p.key] ?? []"
