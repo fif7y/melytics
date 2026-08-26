@@ -41,6 +41,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/sites/{site}/time-to-convert', [StatsController::class, 'timeToConvert']);
 
     Route::post('/sites/{site}/goals', [GoalController::class, 'store']);
+    Route::patch('/sites/{site}/goals/{goal}', [GoalController::class, 'update']);
     Route::delete('/sites/{site}/goals/{goal}', [GoalController::class, 'destroy']);
 
     Route::get('/sites/{site}/funnels', [FunnelController::class, 'index']);

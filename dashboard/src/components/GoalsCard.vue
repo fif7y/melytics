@@ -40,6 +40,34 @@ async function add() {
   }
 }
 
+const editingId = ref<number | null>(null)
+const editName = ref('')
+const editTarget = ref('')
+
+function startEdit(g: GoalRow) {
+  editingId.value = g.id
+  editName.value = g.name
+  editTarget.value = g.event ?? g.path_pattern ?? ''
+}
+
+async function saveEdit() {
+  if (!editName.value || !editTarget.value || editingId.value === null) return
+  busy.value = true
+  const isPath = editTarget.value.startsWith('/')
+  try {
+    await api(`/sites/${props.siteId}/goals/${editingId.value}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ name: editName.value, [isPath ? 'path_pattern' : 'event']: editTarget.value }),
+    })
+    editingId.value = null
+    emit('changed')
+  } catch (e) {
+    alert(e instanceof Error ? e.message : 'Could not update the goal')
+  } finally {
+    busy.value = false
+  }
+}
+
 async function remove(id: number) {
   try {
     await api(`/sites/${props.siteId}/goals/${id}`, { method: 'DELETE' })
@@ -86,18 +114,44 @@ async function remove(id: number) {
 
     <ul class="space-y-1.5">
       <li v-for="g in goals" :key="g.id" class="group flex items-baseline gap-3 rounded-md px-2.5 py-1.5">
-        <span class="text-sm">{{ g.name }}</span>
-        <span class="text-xs text-[var(--ink-3)]">{{ g.event ?? g.path_pattern }}</span>
-        <span class="ml-auto text-sm tabular-nums">{{ g.conversions.toLocaleString() }}</span>
-        <span class="text-sm tabular-nums text-[var(--ink-2)] w-14 text-right">{{ g.rate }}%</span>
-        <button
-          class="-my-1 flex h-7 w-7 items-center justify-center self-center rounded-md text-[var(--ink-3)] opacity-60 transition-opacity hover:bg-[var(--bg)] hover:text-[var(--down)] group-hover:opacity-100"
-          title="Delete goal"
-          aria-label="Delete goal"
-          @click="remove(g.id)"
-        >
-          ×
-        </button>
+        <form v-if="editingId === g.id" class="flex flex-1 gap-2" @submit.prevent="saveEdit">
+          <input
+            v-model="editName"
+            placeholder="Name"
+            class="w-28 rounded-lg px-3 py-1.5 text-sm bg-[var(--bg)] outline-none focus:ring-2 ring-[var(--accent)]"
+          />
+          <input
+            v-model="editTarget"
+            placeholder="event name, or /path (wildcards ok)"
+            class="flex-1 rounded-lg px-3 py-1.5 text-sm bg-[var(--bg)] outline-none focus:ring-2 ring-[var(--accent)]"
+          />
+          <button :disabled="busy" class="rounded-lg px-3 py-1.5 text-sm text-white bg-[var(--accent)] disabled:opacity-50">Save</button>
+          <button type="button" class="rounded-lg px-2 py-1.5 text-sm text-[var(--ink-3)]" @click="editingId = null">Cancel</button>
+        </form>
+        <template v-else>
+          <span class="text-sm">{{ g.name }}</span>
+          <span class="text-xs text-[var(--ink-3)]">{{ g.event ?? g.path_pattern }}</span>
+          <span class="ml-auto text-sm tabular-nums">{{ g.conversions.toLocaleString() }}</span>
+          <span class="text-sm tabular-nums text-[var(--ink-2)] w-14 text-right">{{ g.rate }}%</span>
+          <button
+            class="-my-1 flex h-7 w-7 items-center justify-center self-center rounded-md text-[var(--ink-3)] opacity-60 transition-opacity hover:bg-[var(--bg)] hover:text-[var(--ink)] group-hover:opacity-100"
+            title="Edit goal"
+            aria-label="Edit goal"
+            @click="startEdit(g)"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z" />
+            </svg>
+          </button>
+          <button
+            class="-my-1 flex h-7 w-7 items-center justify-center self-center rounded-md text-[var(--ink-3)] opacity-60 transition-opacity hover:bg-[var(--bg)] hover:text-[var(--down)] group-hover:opacity-100"
+            title="Delete goal"
+            aria-label="Delete goal"
+            @click="remove(g.id)"
+          >
+            ×
+          </button>
+        </template>
       </li>
     </ul>
   </section>

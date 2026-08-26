@@ -21,6 +21,21 @@ class GoalController extends Controller
         return response()->json($site->goals()->create($data), 201);
     }
 
+    public function update(Request $request, Site $site, Goal $goal): JsonResponse
+    {
+        $this->authorizeSite($request, $site);
+        abort_unless($goal->site_id === $site->id, 404);
+        $data = $request->validate([
+            'name' => 'required|string|max:255',
+            'event' => 'nullable|string|max:64|required_without:path_pattern',
+            'path_pattern' => 'nullable|string|max:512|required_without:event',
+        ]);
+        // switching type clears the other target column
+        $goal->update(['name' => $data['name'], 'event' => $data['event'] ?? null, 'path_pattern' => $data['path_pattern'] ?? null]);
+
+        return response()->json(['ok' => true]);
+    }
+
     public function destroy(Request $request, Site $site, Goal $goal): JsonResponse
     {
         $this->authorizeSite($request, $site);
