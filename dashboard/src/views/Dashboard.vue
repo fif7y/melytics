@@ -313,8 +313,8 @@ async function logout() {
       </section>
 
       <div v-if="show('goals') || show('funnels')" class="grid gap-5 lg:grid-cols-2">
-        <GoalsCard v-if="show('goals')" :site-id="siteId" :goals="goals" @changed="load" />
-        <FunnelsCard v-if="show('funnels')" :site-id="siteId" :funnels="funnels" @changed="load" />
+        <GoalsCard v-if="show('goals')" class="h-full" :site-id="siteId" :goals="goals" @changed="load" />
+        <FunnelsCard v-if="show('funnels')" class="h-full" :site-id="siteId" :funnels="funnels" @changed="load" />
       </div>
 
       <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
@@ -330,9 +330,10 @@ async function logout() {
           @dragleave="overKey === p.key && (overKey = null)"
           @drop.prevent="dropOn(p.key)"
         >
-          <VitalsCard v-if="p.key === 'vitals' && vitals" :vitals="vitals" />
+          <VitalsCard v-if="p.key === 'vitals' && vitals" class="h-full" :vitals="vitals" />
           <BreakdownCard
             v-else-if="p.key !== 'vitals'"
+            class="h-full"
             :title="p.title"
             :rows="breakdowns[p.key] ?? []"
             :dim="p.key"
