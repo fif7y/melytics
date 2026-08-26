@@ -57,7 +57,6 @@ class IngestController extends Controller
         Hit::create([
             'site_id' => $siteId,
             'visitor_hash' => $enrich->visitorHash($siteId, $request),
-            'visitor_id' => $tier2 ? ($data['i'] ?? null) : null,
             'path' => substr($url['path'] ?? '/', 0, 512),
             'referrer_host' => $refHost ? substr($refHost, 0, 255) : null,
             'utm_source' => isset($query['utm_source']) ? substr($query['utm_source'], 0, 255) : null,
@@ -70,7 +69,8 @@ class IngestController extends Controller
             'screen_w' => $data['w'] ?? null,
             'event' => $data['e'] ?? null,
             'event_props' => $data['p'] ?? null,
-        ]);
+            // key omitted entirely unless consented, so inserts still work pre-migration
+        ] + ($tier2 && ! empty($data['i']) ? ['visitor_id' => $data['i']] : []));
 
         return response()->noContent();
     }
