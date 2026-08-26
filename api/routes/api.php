@@ -29,6 +29,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/sites/{site}/goals', [StatsController::class, 'goals']);
     Route::get('/sites/{site}/vitals', [StatsController::class, 'vitals']);
     Route::get('/sites/{site}/retention', [StatsController::class, 'retention']);
+    Route::get('/sites/{site}/cohorts', [StatsController::class, 'cohorts']);
+    Route::get('/sites/{site}/loyalty', [StatsController::class, 'loyalty']);
 
     Route::post('/sites/{site}/goals', [GoalController::class, 'store']);
     Route::delete('/sites/{site}/goals/{goal}', [GoalController::class, 'destroy']);

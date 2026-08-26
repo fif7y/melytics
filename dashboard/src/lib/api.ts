@@ -74,6 +74,16 @@ export interface Retention {
   new: number
   returning: number
 }
+export interface CohortRow {
+  week: string
+  size: number
+  active: number[]
+}
+export interface Loyalty {
+  identified: number
+  avg: number
+  buckets: { label: string; visitors: number }[]
+}
 export interface Annotation {
   id: number
   day: string

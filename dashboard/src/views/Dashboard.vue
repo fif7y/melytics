@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { api, setToken, type Annotation, type BreakdownRow, type Retention, type Site, type Stats } from '../lib/api'
+import { api, setToken, type Annotation, type BreakdownRow, type CohortRow, type Loyalty, type Retention, type Site, type Stats } from '../lib/api'
 import TimeChart from '../components/TimeChart.vue'
 import BreakdownCard from '../components/BreakdownCard.vue'
 import StatStrip from '../components/StatStrip.vue'
@@ -9,6 +9,8 @@ import GoalsCard, { type GoalRow } from '../components/GoalsCard.vue'
 import FunnelsCard, { type FunnelRow } from '../components/FunnelsCard.vue'
 import VitalsCard, { type Vitals } from '../components/VitalsCard.vue'
 import RetentionCard from '../components/RetentionCard.vue'
+import CohortCard from '../components/CohortCard.vue'
+import LoyaltyCard from '../components/LoyaltyCard.vue'
 import SharePanel from '../components/SharePanel.vue'
 import { theme, toggleTheme, effectiveTheme } from '../lib/theme'
 import SettingsPanel from '../components/SettingsPanel.vue'
@@ -22,6 +24,8 @@ const goals = ref<GoalRow[]>([])
 const funnels = ref<FunnelRow[]>([])
 const vitals = ref<Vitals | null>(null)
 const retention = ref<Retention | null>(null)
+const cohorts = ref<CohortRow[] | null>(null)
+const loyalty = ref<Loyalty | null>(null)
 const annotations = ref<Annotation[]>([])
 const noting = ref(false)
 const noteDay = ref(new Date().toISOString().slice(0, 10))
@@ -74,6 +78,8 @@ const MODULES = [
   { key: 'live', label: 'Live pages' },
   { key: 'vitals', label: 'Web Vitals' },
   { key: 'retention', label: 'Retention', tier2: true },
+  { key: 'cohorts', label: 'Cohorts', tier2: true },
+  { key: 'loyalty', label: 'Loyalty', tier2: true },
   { key: 'goals', label: 'Goals' },
   { key: 'funnels', label: 'Funnels' },
   ...PANELS.map((p) => ({ key: p.key, label: p.title })),
@@ -102,7 +108,7 @@ const order = ref<string[]>(
   })()
 )
 // Vitals lives in the same reorderable grid as the breakdowns
-const GRID_ITEMS = [{ key: 'live', title: 'Live' }, { key: 'vitals', title: 'Web Vitals' }, { key: 'retention', title: 'Retention' }, ...PANELS]
+const GRID_ITEMS = [{ key: 'live', title: 'Live' }, { key: 'vitals', title: 'Web Vitals' }, { key: 'retention', title: 'Retention' }, { key: 'cohorts', title: 'Cohorts' }, { key: 'loyalty', title: 'Loyalty' }, ...PANELS]
 const orderedPanels = computed(() => {
   const idx = (k: string) => {
     const i = order.value.indexOf(k)
@@ -179,13 +185,15 @@ async function load() {
   const id = siteId.value
   // hidden modules are not fetched at all (funnels especially are heavier queries)
   const activePanels = PANELS.filter((p) => show(p.key))
-  const [s, a, g, f, v, rt, ...panels] = await Promise.all([
+  const [s, a, g, f, v, rt, co, lo, ...panels] = await Promise.all([
     api<Stats>(`/sites/${id}/stats?${rangeParams()}${filterQS()}`),
     api<{ annotations: Annotation[] }>(`/sites/${id}/annotations?${rangeParams()}`),
     show('goals') ? api<{ goals: GoalRow[] }>(`/sites/${id}/goals?${rangeParams()}`) : null,
     show('funnels') ? api<{ funnels: FunnelRow[] }>(`/sites/${id}/funnels?${rangeParams()}`) : null,
     show('vitals') ? api<Vitals>(`/sites/${id}/vitals?${rangeParams()}`) : null,
     show('retention') ? api<Retention>(`/sites/${id}/retention?${rangeParams()}`) : null,
+    show('cohorts') ? api<{ cohorts: CohortRow[] }>(`/sites/${id}/cohorts`) : null,
+    show('loyalty') ? api<Loyalty>(`/sites/${id}/loyalty?${rangeParams()}`) : null,
     ...activePanels.map((p) =>
       api<{ rows: BreakdownRow[] }>(`/sites/${id}/breakdown?dimension=${p.key}&${rangeParams()}&limit=8${filterQS()}`)
     ),
@@ -196,6 +204,8 @@ async function load() {
   funnels.value = f ? (f as { funnels: FunnelRow[] }).funnels : []
   vitals.value = v ? (v as Vitals) : null
   retention.value = rt ? (rt as Retention) : null
+  cohorts.value = co ? (co as { cohorts: CohortRow[] }).cohorts : null
+  loyalty.value = lo ? (lo as Loyalty) : null
   breakdowns.value = Object.fromEntries(activePanels.map((p, i) => [p.key, panels[i].rows]))
   loading.value = false
 }
@@ -404,8 +414,20 @@ async function logout() {
             :retention="retention"
             :tier2-enabled="site?.tier2_enabled ?? false"
           />
+          <CohortCard
+            v-else-if="p.key === 'cohorts' && cohorts"
+            class="h-full"
+            :cohorts="cohorts"
+            :tier2-enabled="site?.tier2_enabled ?? false"
+          />
+          <LoyaltyCard
+            v-else-if="p.key === 'loyalty' && loyalty"
+            class="h-full"
+            :loyalty="loyalty"
+            :tier2-enabled="site?.tier2_enabled ?? false"
+          />
           <BreakdownCard
-            v-else-if="p.key !== 'vitals' && p.key !== 'retention' && p.key !== 'live'"
+            v-else-if="!['vitals', 'retention', 'live', 'cohorts', 'loyalty'].includes(p.key)"
             class="h-full"
             :title="p.title"
             :rows="breakdowns[p.key] ?? []"

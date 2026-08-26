@@ -382,6 +382,111 @@ class Stats
         ];
     }
 
+    /**
+     * Tier-2 weekly cohorts: consented visitors grouped by first-seen week
+     * (site-local, Monday-based), with distinct visitors active 1..n weeks later.
+     *
+     * @return array<int, array{week: string, size: int, active: array<int, int>}>
+     */
+    public function cohorts(Site $site, int $weeks = 8): array
+    {
+        $off = self::tzOffset($site->timezone);
+        $driver = DB::connection()->getDriverName();
+        // Week index since Monday 2024-01-01, in site-local time
+        $wk = $driver === 'mysql'
+            ? "FLOOR(DATEDIFF(DATE_ADD(created_at, INTERVAL $off MINUTE), '2024-01-01') / 7)"
+            : "CAST((julianday(date(datetime(created_at, '$off minutes'))) - julianday('2024-01-01')) / 7 AS INTEGER)";
+
+        $rows = DB::select(
+            "SELECT visitor_id, $wk AS wk FROM hits
+             WHERE site_id = ? AND visitor_id IS NOT NULL
+             GROUP BY visitor_id, wk",
+            [$site->id]
+        );
+
+        $first = [];
+        $active = [];
+        foreach ($rows as $r) {
+            $first[$r->visitor_id] = min($first[$r->visitor_id] ?? PHP_INT_MAX, (int) $r->wk);
+            $active[$r->visitor_id][] = (int) $r->wk;
+        }
+
+        $nowWk = intdiv((int) Carbon::parse('2024-01-01')->diffInDays(now($site->timezone)), 7);
+        $startWk = $nowWk - $weeks + 1;
+
+        $cohorts = [];
+        for ($w = $startWk; $w <= $nowWk; $w++) {
+            $cohorts[$w] = [
+                'week' => Carbon::parse('2024-01-01')->addWeeks($w)->toDateString(),
+                'size' => 0,
+                'active' => array_fill(0, $nowWk - $w + 1, 0),
+            ];
+        }
+        foreach ($first as $id => $w) {
+            if ($w < $startWk) {
+                continue;
+            }
+            $cohorts[$w]['size']++;
+            foreach (array_unique($active[$id]) as $aw) {
+                $cohorts[$w]['active'][$aw - $w]++;
+            }
+        }
+
+        return array_values($cohorts);
+    }
+
+    /**
+     * Tier-2 loyalty: visits (30-min-gap sessions) per consented visitor in range,
+     * bucketed into a frequency distribution.
+     *
+     * @return array{identified: int, avg: float, buckets: array<int, array{label: string, visitors: int}>}
+     */
+    public function loyalty(Site $site, Carbon $from, Carbon $to): array
+    {
+        [$f, $t] = self::utcBounds($from, $to);
+        $driver = DB::connection()->getDriverName();
+        $epoch = fn (string $x) => $driver === 'mysql' ? "UNIX_TIMESTAMP($x)" : "CAST(strftime('%s', $x) AS INTEGER)";
+
+        $rows = DB::select(
+            "WITH v AS (
+                SELECT visitor_id,
+                       CASE WHEN LAG(created_at) OVER w IS NULL
+                            OR {$epoch('created_at')} - {$epoch('LAG(created_at) OVER w')} > 1800
+                            THEN 1 ELSE 0 END AS s0
+                FROM hits
+                WHERE site_id = ? AND visitor_id IS NOT NULL AND created_at BETWEEN ? AND ?
+                WINDOW w AS (PARTITION BY visitor_id ORDER BY created_at)
+            ) SELECT SUM(s0) AS visits FROM v GROUP BY visitor_id",
+            [$site->id, $f, $t]
+        );
+
+        $buckets = [
+            ['label' => '1 visit', 'min' => 1, 'max' => 1, 'visitors' => 0],
+            ['label' => '2', 'min' => 2, 'max' => 2, 'visitors' => 0],
+            ['label' => '3–5', 'min' => 3, 'max' => 5, 'visitors' => 0],
+            ['label' => '6–10', 'min' => 6, 'max' => 10, 'visitors' => 0],
+            ['label' => '11+', 'min' => 11, 'max' => PHP_INT_MAX, 'visitors' => 0],
+        ];
+        $total = 0;
+        foreach ($rows as $r) {
+            $v = (int) $r->visits;
+            $total += $v;
+            foreach ($buckets as &$b) {
+                if ($v >= $b['min'] && $v <= $b['max']) {
+                    $b['visitors']++;
+                    break;
+                }
+            }
+            unset($b);
+        }
+
+        return [
+            'identified' => count($rows),
+            'avg' => count($rows) ? round($total / count($rows), 1) : 0.0,
+            'buckets' => array_map(fn ($b) => ['label' => $b['label'], 'visitors' => $b['visitors']], $buckets),
+        ];
+    }
+
     /** @param array{dimension: string, value: string}|null $filter */
     public function series(int $siteId, Carbon $from, Carbon $to, string $interval, ?array $filter = null, int $offsetMin = 0)
     {

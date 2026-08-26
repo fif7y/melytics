@@ -72,6 +72,21 @@ class StatsController extends Controller
         return response()->json($this->stats->retention($site, $from, $to));
     }
 
+    public function cohorts(Request $request, Site $site): JsonResponse
+    {
+        $this->authorizeSite($request, $site);
+
+        return response()->json(['cohorts' => $this->stats->cohorts($site)]);
+    }
+
+    public function loyalty(Request $request, Site $site): JsonResponse
+    {
+        $this->authorizeSite($request, $site);
+        [$from, $to] = $this->stats->range($request->query('from'), $request->query('to'), null, $site->timezone);
+
+        return response()->json($this->stats->loyalty($site, $from, $to));
+    }
+
     public function live(Request $request, Site $site): JsonResponse
     {
         $this->authorizeSite($request, $site);
