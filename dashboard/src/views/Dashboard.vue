@@ -119,7 +119,7 @@ const order = ref<string[]>(
 )
 // Vitals lives in the same reorderable grid as the breakdowns
 // Default grid order for fresh installs — the curated layout (saved 2026-08-26)
-const GRID_DEFAULT = ['page', 'live', 'country', 'referrer', 'device', 'browser', 'vitals', 'entry_page', 'exit_page', 'channel', 'not_found', 'retention', 'outbound', 'download', 'utm_source', 'utm_medium', 'cohorts', 'loyalty', 'attribution', 'ttc', 'utm_campaign', 'event']
+const GRID_DEFAULT = ['page', 'live', 'country', 'referrer', 'device', 'browser', 'vitals', 'entry_page', 'exit_page', 'channel', 'not_found', 'outbound', 'download', 'utm_source', 'utm_medium', 'utm_campaign', 'event', 'loyalty', 'retention', 'attribution', 'ttc', 'cohorts']
 const SPECIAL_TITLES: Record<string, string> = { live: 'Live', vitals: 'Web Vitals', retention: 'Retention', cohorts: 'Cohorts', loyalty: 'Loyalty', attribution: 'Attribution', ttc: 'Time to convert' }
 const GRID_ITEMS = GRID_DEFAULT.map((k) => PANELS.find((p) => p.key === k) ?? { key: k, title: SPECIAL_TITLES[k] })
 const orderedPanels = computed(() => {
