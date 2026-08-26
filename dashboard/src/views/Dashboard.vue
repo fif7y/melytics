@@ -8,6 +8,7 @@ import GoalsCard, { type GoalRow } from '../components/GoalsCard.vue'
 import FunnelsCard, { type FunnelRow } from '../components/FunnelsCard.vue'
 import VitalsCard, { type Vitals } from '../components/VitalsCard.vue'
 import SharePanel from '../components/SharePanel.vue'
+import SettingsPanel from '../components/SettingsPanel.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -42,6 +43,32 @@ const PANELS = [
   { key: 'event', title: 'Events' },
 ]
 
+const MODULES = [
+  { key: 'vitals', label: 'Web Vitals' },
+  { key: 'goals', label: 'Goals' },
+  { key: 'funnels', label: 'Funnels' },
+  ...PANELS.map((p) => ({ key: p.key, label: p.title })),
+]
+
+const hidden = ref<string[]>(
+  (() => {
+    try {
+      return JSON.parse(localStorage.getItem('melytics_hidden') ?? '[]')
+    } catch {
+      return []
+    }
+  })()
+)
+const show = (key: string) => !hidden.value.includes(key)
+
+function toggleModule(key: string) {
+  hidden.value = show(key) ? [...hidden.value, key] : hidden.value.filter((k) => k !== key)
+  try {
+    localStorage.setItem('melytics_hidden', JSON.stringify(hidden.value))
+  } catch {}
+  load()
+}
+
 const siteId = computed(() => Number(route.params.siteId) || sites.value[0]?.id)
 const site = computed(() => sites.value.find((s) => s.id === siteId.value))
 
@@ -64,22 +91,24 @@ async function load() {
   if (!siteId.value) return
   loading.value = true
   const id = siteId.value
-  const [s, g, f, a, v, ...panels] = await Promise.all([
+  // hidden modules are not fetched at all (funnels especially are heavier queries)
+  const activePanels = PANELS.filter((p) => show(p.key))
+  const [s, a, g, f, v, ...panels] = await Promise.all([
     api<Stats>(`/sites/${id}/stats?${rangeParams()}`),
-    api<{ goals: GoalRow[] }>(`/sites/${id}/goals?${rangeParams()}`),
-    api<{ funnels: FunnelRow[] }>(`/sites/${id}/funnels?${rangeParams()}`),
     api<{ annotations: Annotation[] }>(`/sites/${id}/annotations?${rangeParams()}`),
-    api<Vitals>(`/sites/${id}/vitals?${rangeParams()}`),
-    ...PANELS.map((p) =>
+    show('goals') ? api<{ goals: GoalRow[] }>(`/sites/${id}/goals?${rangeParams()}`) : null,
+    show('funnels') ? api<{ funnels: FunnelRow[] }>(`/sites/${id}/funnels?${rangeParams()}`) : null,
+    show('vitals') ? api<Vitals>(`/sites/${id}/vitals?${rangeParams()}`) : null,
+    ...activePanels.map((p) =>
       api<{ rows: BreakdownRow[] }>(`/sites/${id}/breakdown?dimension=${p.key}&${rangeParams()}&limit=8`)
     ),
   ])
   stats.value = s as Stats
-  goals.value = (g as { goals: GoalRow[] }).goals
-  funnels.value = (f as { funnels: FunnelRow[] }).funnels
   annotations.value = (a as { annotations: Annotation[] }).annotations
-  vitals.value = v as Vitals
-  breakdowns.value = Object.fromEntries(PANELS.map((p, i) => [p.key, panels[i].rows]))
+  goals.value = g ? (g as { goals: GoalRow[] }).goals : []
+  funnels.value = f ? (f as { funnels: FunnelRow[] }).funnels : []
+  vitals.value = v ? (v as Vitals) : null
+  breakdowns.value = Object.fromEntries(activePanels.map((p, i) => [p.key, panels[i].rows]))
   loading.value = false
 }
 
@@ -162,6 +191,7 @@ async function logout() {
       </div>
 
       <SharePanel v-if="siteId" :key="siteId" :site-id="siteId" />
+      <SettingsPanel :modules="MODULES" :hidden="hidden" @toggle="toggleModule" />
       <button class="text-sm text-[var(--ink-3)] hover:text-[var(--ink)]" @click="logout">Sign out</button>
     </header>
 
@@ -227,16 +257,16 @@ async function logout() {
         </div>
       </section>
 
-      <VitalsCard v-if="vitals" :vitals="vitals" />
+      <VitalsCard v-if="vitals && show('vitals')" :vitals="vitals" />
 
-      <div class="grid gap-5 lg:grid-cols-2">
-        <GoalsCard :site-id="siteId" :goals="goals" @changed="load" />
-        <FunnelsCard :site-id="siteId" :funnels="funnels" @changed="load" />
+      <div v-if="show('goals') || show('funnels')" class="grid gap-5 lg:grid-cols-2">
+        <GoalsCard v-if="show('goals')" :site-id="siteId" :goals="goals" @changed="load" />
+        <FunnelsCard v-if="show('funnels')" :site-id="siteId" :funnels="funnels" @changed="load" />
       </div>
 
       <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
         <BreakdownCard
-          v-for="p in PANELS"
+          v-for="p in PANELS.filter((p) => show(p.key))"
           :key="p.key"
           :title="p.title"
           :rows="breakdowns[p.key] ?? []"
