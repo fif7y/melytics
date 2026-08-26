@@ -4,6 +4,20 @@ Privacy-first, cookieless web analytics. GoatCounter-inspired, with a modern
 dashboard, ad-blocker-resistant first-party ingestion, and a two-tier privacy
 model (consentless by default; consent-gated extras only where the law requires).
 
+![Dashboard](phase2-dashboard.png)
+
+## Features
+
+- Pageviews, uniques, referrers, pages, countries, devices — with cross-filter
+  (click any breakdown row to filter everything else)
+- Goals & custom events, funnels with drop-off, chart annotations
+- Web Vitals (LCP/CLS/INP p75, threshold tracks)
+- Retention (new vs returning, tier-2 consented visitors only)
+- Public share links (password-optional, stateless HMAC tokens)
+- Weekly email digest
+- Light/dark theme, drag-to-reorder dashboard modules
+- MCP server — query your analytics from Claude or any MCP client
+
 ## Layout
 
 | Dir | What |
@@ -11,7 +25,9 @@ model (consentless by default; consent-gated extras only where the law requires)
 | `api/` | Laravel API — ingest, enrichment, rollups, stats endpoints |
 | `dashboard/` | Vue 3 + Tailwind SPA — mounts anywhere (relative base + hash router) |
 | `tracker/` | The snippet. <1KB gzipped, zero deps |
+| `mcp/` | MCP server (stdio, 8 tools) over the stats API |
 | `deploy/` | Hostinger shared-hosting guide, first-party proxy template, docker-compose for VPS |
+| `docs/` | Session handoff log |
 
 ## Quick start (local)
 
@@ -40,9 +56,10 @@ ad-blocker-resistant.
 
 - **Tier 1 (always, consentless):** no cookies, no fingerprinting, no PII.
   Uniques via a daily-rotating salted hash; IP used in-memory only.
-- **Tier 2 (opt-in, consent-gated):** retention/journeys via localStorage id.
-  Consent is requested only in jurisdictions that require it (geo-detected at
-  ingest); elsewhere it activates automatically. `melytics.consent(true)` hooks
-  any CMP. (Tier 2 features land in phase 3.)
+- **Tier 2 (opt-in, consent-gated):** retention via a persistent localStorage
+  visitor id, sent only after `melytics.consent(true)` (hook it to any CMP) and
+  stored only for sites with the Privacy toggle enabled. `melytics.consent(false)`
+  wipes the id. Ask for consent only where the law requires it — geo-gate the
+  prompt client-side (e.g. by IANA timezone).
 
 Custom events: `melytics.track('signup', {plan: 'pro'})`.
