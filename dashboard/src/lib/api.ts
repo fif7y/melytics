@@ -44,12 +44,22 @@ export interface SeriesPoint {
   t: string
   pageviews: number
   visitors: number
+  sessions?: number
+  bounces?: number
+  duration_sum?: number
+}
+export interface Totals {
+  pageviews: number
+  visitors: number
+  sessions?: number
+  bounce_rate?: number | null
+  avg_duration?: number | null
 }
 export interface Stats {
   series: SeriesPoint[]
   previous_series: SeriesPoint[]
-  totals: { pageviews: number; visitors: number }
-  previous_totals: { pageviews: number; visitors: number }
+  totals: Totals
+  previous_totals: Totals
   range: { from: string; to: string; interval: 'hour' | 'day' }
 }
 export interface Site {

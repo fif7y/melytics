@@ -23,6 +23,54 @@ class Stats
         'event' => 'event',
     ];
 
+    /** Breakdown dimensions derived from internal events rather than hit columns. */
+    public const EVENT_DIMENSIONS = [
+        'outbound' => '__outbound',
+        'download' => '__download',
+        'not_found' => '__404',
+    ];
+
+    /**
+     * WITH-clause prefix yielding session-level rows in `sp`: hits grouped per
+     * visitor split on >30-min inactivity gaps. Heartbeat pings extend duration
+     * but never count as pageviews; ping-only sessions are dropped, so first_pv
+     * (the session's first pageview) is always set — sessions bucket by it.
+     * Named bindings: :site, :lookback, :to (+ :fval when $filterDimension given).
+     */
+    public static function sessionSql(?string $filterDimension = null): string
+    {
+        $driver = DB::connection()->getDriverName();
+        $epoch = fn (string $x) => $driver === 'mysql' ? "UNIX_TIMESTAMP($x)" : "CAST(strftime('%s', $x) AS INTEGER)";
+        $filter = $filterDimension ? ' AND '.self::FILTERABLE[$filterDimension].' = :fval' : '';
+
+        return "WITH mh AS (
+            SELECT visitor_hash, created_at, path, event,
+                   CASE WHEN LAG(created_at) OVER w IS NULL
+                        OR {$epoch('created_at')} - {$epoch('LAG(created_at) OVER w')} > 1800
+                        THEN 1 ELSE 0 END AS s0
+            FROM hits
+            WHERE site_id = :site AND created_at >= :lookback AND created_at <= :to
+              AND (event IS NULL OR event = '__ping')$filter
+            WINDOW w AS (PARTITION BY visitor_hash ORDER BY created_at)
+        ), mg AS (
+            SELECT mh.*, SUM(s0) OVER (PARTITION BY visitor_hash ORDER BY created_at) AS sid FROM mh
+        ), sess AS (
+            SELECT visitor_hash, sid,
+                   {$epoch('MAX(created_at)')} - {$epoch('MIN(created_at)')} AS duration,
+                   SUM(CASE WHEN event IS NULL THEN 1 ELSE 0 END) AS pageviews,
+                   MIN(CASE WHEN event IS NULL THEN created_at END) AS first_pv,
+                   MAX(CASE WHEN event IS NULL THEN created_at END) AS last_pv
+            FROM mg GROUP BY visitor_hash, sid
+        ), sp AS (
+            SELECT sess.*,
+                   (SELECT path FROM mg WHERE mg.visitor_hash = sess.visitor_hash AND mg.sid = sess.sid
+                     AND mg.created_at = sess.first_pv AND mg.event IS NULL LIMIT 1) AS entry_path,
+                   (SELECT path FROM mg WHERE mg.visitor_hash = sess.visitor_hash AND mg.sid = sess.sid
+                     AND mg.created_at = sess.last_pv AND mg.event IS NULL LIMIT 1) AS exit_path
+            FROM sess WHERE sess.pageviews > 0
+        ) ";
+    }
+
     /** @param array{dimension: string, value: string}|null $filter */
     public function overview(Site $site, Carbon $from, Carbon $to, string $interval, ?array $filter = null): array
     {
@@ -43,6 +91,20 @@ class Stats
     public function breakdown(Site $site, string $dimension, Carbon $from, Carbon $to, int $limit = 20, ?array $filter = null)
     {
         if ($filter) {
+            if (in_array($dimension, ['entry_page', 'exit_page'], true)) {
+                return $this->filteredSessionBreakdown($site->id, $dimension, $from, $to, $limit, $filter);
+            }
+            if (isset(self::EVENT_DIMENSIONS[$dimension])) {
+                $col = $dimension === 'not_found' ? 'path' : $this->jsonUrlExpr();
+                return $this->filteredHits($site->id, $from, $to, $filter)
+                    ->where('event', self::EVENT_DIMENSIONS[$dimension])
+                    ->groupByRaw($col)
+                    ->orderByRaw('COUNT(*) DESC')
+                    ->limit($limit)
+                    ->selectRaw("$col as value, COUNT(*) as pageviews, COUNT(DISTINCT visitor_hash) as visitors")
+                    ->get();
+            }
+
             $col = self::FILTERABLE[$dimension];
             $q = $this->filteredHits($site->id, $from, $to, $filter);
             if ($dimension === 'event') {
@@ -69,6 +131,35 @@ class Stats
             ->limit($limit)
             ->selectRaw('value, SUM(pageviews) as pageviews, SUM(visitors) as visitors')
             ->get();
+    }
+
+    /** JSON url extractor for __outbound / __download event props, per driver. */
+    private function jsonUrlExpr(): string
+    {
+        return DB::connection()->getDriverName() === 'mysql'
+            ? "JSON_UNQUOTE(JSON_EXTRACT(event_props, '$.url'))"
+            : "json_extract(event_props, '$.url')";
+    }
+
+    /** Entry/exit pages under a cross-filter: sessions rebuilt from raw hits. */
+    private function filteredSessionBreakdown(int $siteId, string $dimension, Carbon $from, Carbon $to, int $limit, array $filter)
+    {
+        if ($filter['dimension'] === 'event') {
+            return collect(); // custom events are excluded from session hits
+        }
+        $col = $dimension === 'entry_page' ? 'entry_path' : 'exit_path';
+
+        return collect(DB::select(
+            self::sessionSql($filter['dimension'])."
+            SELECT $col as value, COUNT(*) as pageviews, COUNT(DISTINCT visitor_hash) as visitors
+            FROM sp GROUP BY $col ORDER BY COUNT(*) DESC LIMIT $limit",
+            [
+                'site' => $siteId,
+                'lookback' => $from->toDateTimeString(),
+                'to' => $to->copy()->endOfDay()->toDateTimeString(),
+                'fval' => $filter['value'],
+            ]
+        ));
     }
 
     /** Raw-hits base query for a cross-filter (rollups are per-dimension, so filtered stats must scan hits). */
@@ -251,7 +342,7 @@ class Stats
                 ? [$from->toDateTimeString(), $to->copy()->endOfDay()->toDateTimeString()]
                 : [$from->toDateString(), $to->toDateString()])
             ->orderBy($col)
-            ->select([$col.' as t', 'pageviews', 'visitors'])
+            ->select([$col.' as t', 'pageviews', 'visitors', 'sessions', 'bounces', 'duration_sum'])
             ->get();
     }
 
@@ -267,17 +358,54 @@ class Stats
             return [
                 'pageviews' => (clone $q)->count(),
                 'visitors' => (clone $q)->distinct()->count('visitor_hash'),
-            ];
+            ] + $this->filteredSessionTotals($siteId, $from, $to, $filter);
         }
 
         $row = DB::table('rollup_daily')
             ->where('site_id', $siteId)
             ->where('dimension', 'total')
             ->whereBetween('day', [$from->toDateString(), $to->toDateString()])
-            ->selectRaw('COALESCE(SUM(pageviews),0) as pageviews, COALESCE(SUM(visitors),0) as visitors')
+            ->selectRaw('COALESCE(SUM(pageviews),0) as pageviews, COALESCE(SUM(visitors),0) as visitors,'
+                .' COALESCE(SUM(sessions),0) as sessions, COALESCE(SUM(bounces),0) as bounces,'
+                .' COALESCE(SUM(duration_sum),0) as duration_sum')
             ->first();
 
-        return ['pageviews' => (int) $row->pageviews, 'visitors' => (int) $row->visitors];
+        return [
+            'pageviews' => (int) $row->pageviews,
+            'visitors' => (int) $row->visitors,
+        ] + self::sessionMetrics((int) $row->sessions, (int) $row->bounces, (int) $row->duration_sum);
+    }
+
+    /** @return array{sessions: int, bounce_rate: ?float, avg_duration: ?int} */
+    private static function sessionMetrics(int $sessions, int $bounces, int $duration): array
+    {
+        return [
+            'sessions' => $sessions,
+            'bounce_rate' => $sessions ? round($bounces / $sessions * 100, 1) : null,
+            'avg_duration' => $sessions ? (int) round($duration / $sessions) : null,
+        ];
+    }
+
+    /** Session totals under a cross-filter, rebuilt from raw hits. */
+    private function filteredSessionTotals(int $siteId, Carbon $from, Carbon $to, array $filter): array
+    {
+        if ($filter['dimension'] === 'event') {
+            return self::sessionMetrics(0, 0, 0); // custom events are excluded from session hits
+        }
+        $row = DB::selectOne(
+            self::sessionSql($filter['dimension'])."
+            SELECT COUNT(*) as s, COALESCE(SUM(CASE WHEN pageviews = 1 THEN 1 ELSE 0 END),0) as b,
+                   COALESCE(SUM(duration),0) as d
+            FROM sp",
+            [
+                'site' => $siteId,
+                'lookback' => $from->toDateTimeString(),
+                'to' => $to->copy()->endOfDay()->toDateTimeString(),
+                'fval' => $filter['value'],
+            ]
+        );
+
+        return self::sessionMetrics((int) $row->s, (int) $row->b, (int) $row->d);
     }
 
     /** @return array{0: Carbon, 1: Carbon, 2: string} */

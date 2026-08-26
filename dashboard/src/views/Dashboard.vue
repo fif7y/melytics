@@ -40,14 +40,20 @@ const RANGES = [
   { label: '30d', days: 30 },
   { label: '90d', days: 90 },
 ]
-const PANELS = [
+// inert panels are observation-only: their dimensions can't cross-filter
+const PANELS: { key: string; title: string; inert?: boolean }[] = [
   { key: 'page', title: 'Pages' },
+  { key: 'entry_page', title: 'Entry pages', inert: true },
+  { key: 'exit_page', title: 'Exit pages', inert: true },
   { key: 'referrer', title: 'Referrers' },
   { key: 'country', title: 'Countries' },
   { key: 'device', title: 'Devices' },
   { key: 'browser', title: 'Browsers' },
   { key: 'utm_campaign', title: 'Campaigns' },
   { key: 'event', title: 'Events' },
+  { key: 'outbound', title: 'Outbound links', inert: true },
+  { key: 'download', title: 'Downloads', inert: true },
+  { key: 'not_found', title: '404s', inert: true },
 ]
 
 const MODULES = [
@@ -388,9 +394,9 @@ async function logout() {
             :title="p.title"
             :rows="breakdowns[p.key] ?? []"
             :dim="p.key"
-            clickable
+            :clickable="!p.inert"
             :selected="filter?.dim === p.key ? filter.value : null"
-            @select="(v) => setFilter(p.key, v)"
+            @select="(v) => !p.inert && setFilter(p.key, v)"
           />
         </div>
       </div>

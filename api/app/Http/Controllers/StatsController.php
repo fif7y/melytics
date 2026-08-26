@@ -37,7 +37,7 @@ class StatsController extends Controller
     {
         $this->authorizeSite($request, $site);
         $dimension = $request->validate([
-            'dimension' => 'required|in:page,referrer,country,device,browser,os,utm_source,utm_medium,utm_campaign,event',
+            'dimension' => 'required|in:page,referrer,country,device,browser,os,utm_source,utm_medium,utm_campaign,event,entry_page,exit_page,outbound,download,not_found',
         ])['dimension'];
         [$from, $to] = $this->stats->range($request->query('from'), $request->query('to'));
         $limit = min((int) $request->query('limit', 20), 100);

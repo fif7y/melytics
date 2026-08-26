@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\Site;
+use App\Services\Stats;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 
@@ -74,6 +75,66 @@ class Rollup extends Command
                     [$dimension, $siteId, $from]
                 );
             }
+
+            // outbound / download / not_found — value comes from event props (url) or path
+            $jsonUrl = DB::connection()->getDriverName() === 'mysql'
+                ? "JSON_UNQUOTE(JSON_EXTRACT(event_props, '$.url'))"
+                : "json_extract(event_props, '$.url')";
+            foreach (Stats::EVENT_DIMENSIONS as $dimension => $event) {
+                $valueExpr = $dimension === 'not_found' ? "COALESCE(path, '')" : "COALESCE($jsonUrl, '')";
+                DB::insert(
+                    "INSERT INTO $table (site_id, $periodCol, dimension, value, pageviews, visitors)
+                     SELECT site_id, $periodExpr, ?, $valueExpr, COUNT(*), COUNT(DISTINCT visitor_hash)
+                     FROM hits
+                     WHERE site_id = ? AND created_at >= ? AND event = ?
+                     GROUP BY site_id, $periodExpr, $valueExpr",
+                    [$dimension, $siteId, $from, $event]
+                );
+            }
+
+            $this->rollupSessions($siteId, $table, $periodCol, $periodExpr, $from);
         });
+    }
+
+    /**
+     * Session metrics per period: sessions/bounces/duration onto the existing
+     * 'total' rows, plus entry_page / exit_page dimension rows. Sessions bucket
+     * by their first pageview, so a matching 'total' row always exists. The
+     * lookback lets sessions that started before the recompute window resolve
+     * their gap-split correctly without touching rows outside it.
+     */
+    private function rollupSessions(int $siteId, string $table, string $periodCol, string $periodExpr, $from): void
+    {
+        $pExpr = str_replace('created_at', 'first_pv', $periodExpr);
+        $bind = [
+            'site' => $siteId,
+            'lookback' => $from->copy()->subHours(6)->toDateTimeString(),
+            'to' => now()->toDateTimeString(),
+            'from' => $from->toDateTimeString(),
+        ];
+
+        $agg = DB::select(Stats::sessionSql()."
+            SELECT $pExpr AS p, COUNT(*) AS s,
+                   SUM(CASE WHEN pageviews = 1 THEN 1 ELSE 0 END) AS b,
+                   COALESCE(SUM(duration), 0) AS d
+            FROM sp WHERE first_pv >= :from GROUP BY $pExpr", $bind);
+        foreach ($agg as $row) {
+            DB::table($table)
+                ->where(['site_id' => $siteId, 'dimension' => 'total', $periodCol => $row->p])
+                ->update(['sessions' => $row->s, 'bounces' => $row->b, 'duration_sum' => $row->d]);
+        }
+
+        // pageviews column doubles as the session count so the existing
+        // breakdown query orders and renders these rows unchanged
+        foreach (['entry_page' => 'entry_path', 'exit_page' => 'exit_path'] as $dimension => $col) {
+            $rows = DB::select(Stats::sessionSql()."
+                SELECT $pExpr AS p, $col AS v, COUNT(*) AS s, COUNT(DISTINCT visitor_hash) AS u
+                FROM sp WHERE first_pv >= :from GROUP BY $pExpr, $col", $bind);
+            DB::table($table)->insert(array_map(fn ($r) => [
+                'site_id' => $siteId, $periodCol => $r->p, 'dimension' => $dimension,
+                'value' => $r->v ?? '', 'pageviews' => $r->s, 'visitors' => $r->u,
+                'sessions' => $r->s,
+            ], $rows));
+        }
     }
 }
