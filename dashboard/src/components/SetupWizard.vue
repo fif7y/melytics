@@ -307,7 +307,7 @@ const STEPS = ['Welcome', 'Goals', 'Funnel', 'Create']
                     <span class="ml-auto font-mono text-[11px] text-[var(--ink-3)]">{{ funnelSteps.filter((s) => s.trim()).join(' → ') }}</span>
                   </div>
                 </template>
-                <p v-if="!toCreate.length && !funnelOn" class="text-sm text-[var(--ink-3)]">Nothing selected — go back and pick at least one goal, or close the assistant.</p>
+                <p v-if="!toCreate.length && !funnelOn" class="text-sm text-[var(--ink-3)]">Nothing selected — go back and pick at least one goal or a funnel, or close the assistant.</p>
               </div>
               <div class="mt-10 flex items-center gap-3">
                 <button class="rounded-xl px-4 py-2.5 text-sm text-[var(--ink-2)] hover:bg-[var(--surface)]" @click="go(2)">Back</button>
