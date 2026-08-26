@@ -6,6 +6,7 @@ import TimeChart from '../components/TimeChart.vue'
 import BreakdownCard from '../components/BreakdownCard.vue'
 import GoalsCard, { type GoalRow } from '../components/GoalsCard.vue'
 import FunnelsCard, { type FunnelRow } from '../components/FunnelsCard.vue'
+import VitalsCard, { type Vitals } from '../components/VitalsCard.vue'
 import SharePanel from '../components/SharePanel.vue'
 
 const route = useRoute()
@@ -15,6 +16,7 @@ const sites = ref<Site[]>([])
 const stats = ref<Stats | null>(null)
 const goals = ref<GoalRow[]>([])
 const funnels = ref<FunnelRow[]>([])
+const vitals = ref<Vitals | null>(null)
 const annotations = ref<Annotation[]>([])
 const noting = ref(false)
 const noteDay = ref(new Date().toISOString().slice(0, 10))
@@ -62,11 +64,12 @@ async function load() {
   if (!siteId.value) return
   loading.value = true
   const id = siteId.value
-  const [s, g, f, a, ...panels] = await Promise.all([
+  const [s, g, f, a, v, ...panels] = await Promise.all([
     api<Stats>(`/sites/${id}/stats?${rangeParams()}`),
     api<{ goals: GoalRow[] }>(`/sites/${id}/goals?${rangeParams()}`),
     api<{ funnels: FunnelRow[] }>(`/sites/${id}/funnels?${rangeParams()}`),
     api<{ annotations: Annotation[] }>(`/sites/${id}/annotations?${rangeParams()}`),
+    api<Vitals>(`/sites/${id}/vitals?${rangeParams()}`),
     ...PANELS.map((p) =>
       api<{ rows: BreakdownRow[] }>(`/sites/${id}/breakdown?dimension=${p.key}&${rangeParams()}&limit=8`)
     ),
@@ -75,6 +78,7 @@ async function load() {
   goals.value = (g as { goals: GoalRow[] }).goals
   funnels.value = (f as { funnels: FunnelRow[] }).funnels
   annotations.value = (a as { annotations: Annotation[] }).annotations
+  vitals.value = v as Vitals
   breakdowns.value = Object.fromEntries(PANELS.map((p, i) => [p.key, panels[i].rows]))
   loading.value = false
 }
@@ -222,6 +226,8 @@ async function logout() {
           </span>
         </div>
       </section>
+
+      <VitalsCard v-if="vitals" :vitals="vitals" />
 
       <div class="grid gap-5 lg:grid-cols-2">
         <GoalsCard :site-id="siteId" :goals="goals" @changed="load" />

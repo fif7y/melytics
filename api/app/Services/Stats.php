@@ -110,6 +110,46 @@ class Stats
         return $out;
     }
 
+    /**
+     * p75 Web Vitals from '__vitals' events over the range.
+     *
+     * @return array{samples: int, lcp: ?float, cls: ?float, inp: ?float, ttfb: ?float}
+     */
+    public function vitals(Site $site, Carbon $from, Carbon $to): array
+    {
+        $rows = DB::table('hits')
+            ->where('site_id', $site->id)
+            ->where('event', '__vitals')
+            ->whereBetween('created_at', [$from, $to->copy()->endOfDay()])
+            ->pluck('event_props');
+
+        $metrics = ['lcp' => [], 'cls' => [], 'inp' => [], 'ttfb' => []];
+        foreach ($rows as $json) {
+            $p = json_decode($json, true) ?: [];
+            foreach ($metrics as $key => $_) {
+                if (isset($p[$key]) && is_numeric($p[$key])) {
+                    $metrics[$key][] = (float) $p[$key];
+                }
+            }
+        }
+
+        $p75 = function (array $vals): ?float {
+            if (! $vals) {
+                return null;
+            }
+            sort($vals);
+            return $vals[(int) floor(count($vals) * 0.75)] ?? end($vals);
+        };
+
+        return [
+            'samples' => count($rows),
+            'lcp' => $p75($metrics['lcp']),
+            'cls' => $p75($metrics['cls']),
+            'inp' => $p75($metrics['inp']),
+            'ttfb' => $p75($metrics['ttfb']),
+        ];
+    }
+
     public function series(int $siteId, Carbon $from, Carbon $to, string $interval)
     {
         $table = $interval === 'hour' ? 'rollup_hourly' : 'rollup_daily';

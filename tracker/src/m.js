@@ -45,6 +45,41 @@
     w.addEventListener('popstate', function () { send(); });
   }
 
+  // Web Vitals (LCP, CLS, INP, TTFB) — one '__vitals' event when the page hides
+  if (w.PerformanceObserver) {
+    var lcp, cls = 0, inp = 0, vsent;
+    var po = function (type, cb, opts) {
+      try {
+        var o = new PerformanceObserver(cb);
+        opts = opts || {};
+        opts.type = type;
+        opts.buffered = true;
+        o.observe(opts);
+      } catch (e) {}
+    };
+    po('largest-contentful-paint', function (l) {
+      var es = l.getEntries();
+      if (es.length) lcp = es[es.length - 1].startTime;
+    });
+    po('layout-shift', function (l) {
+      l.getEntries().forEach(function (e) { if (!e.hadRecentInput) cls += e.value; });
+    });
+    po('event', function (l) {
+      l.getEntries().forEach(function (e) { if (e.duration > inp) inp = e.duration; });
+    }, { durationThreshold: 40 });
+    d.addEventListener('visibilitychange', function () {
+      if (d.visibilityState !== 'hidden' || vsent || lcp == null) return;
+      vsent = 1;
+      var nav = performance.getEntriesByType('navigation')[0];
+      send({ e: '__vitals', p: {
+        lcp: Math.round(lcp),
+        cls: Math.round(cls * 1000) / 1000,
+        inp: Math.round(inp),
+        ttfb: nav ? Math.round(nav.responseStart) : null
+      } });
+    });
+  }
+
   // Initial pageview (after paint so we never block)
   if (d.visibilityState === 'prerender') {
     d.addEventListener('visibilitychange', function f() {

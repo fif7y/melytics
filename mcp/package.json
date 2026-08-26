@@ -1,0 +1,13 @@
+{
+  "name": "melytics-mcp",
+  "version": "1.0.0",
+  "description": "MCP server exposing melytics analytics to AI assistants",
+  "type": "module",
+  "bin": {
+    "melytics-mcp": "index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "zod": "^3.24.0"
+  }
+}

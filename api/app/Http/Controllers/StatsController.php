@@ -43,6 +43,14 @@ class StatsController extends Controller
         return response()->json(['goals' => $this->stats->goals($site, $from, $to)]);
     }
 
+    public function vitals(Request $request, Site $site): JsonResponse
+    {
+        $this->authorizeSite($request, $site);
+        [$from, $to] = $this->stats->range($request->query('from'), $request->query('to'));
+
+        return response()->json($this->stats->vitals($site, $from, $to));
+    }
+
     public function live(Request $request, Site $site): JsonResponse
     {
         $this->authorizeSite($request, $site);

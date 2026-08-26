@@ -60,7 +60,8 @@ class Rollup extends Command
 
             foreach (self::DIMENSIONS as $dimension => $column) {
                 $valueExpr = $column === null ? "''" : "COALESCE($column, '')";
-                $filter = $dimension === 'event' ? 'AND event IS NOT NULL' : '';
+                // internal events (__vitals, …) stay out of the event breakdown
+                $filter = $dimension === 'event' ? "AND event IS NOT NULL AND substr(event, 1, 2) != '__'" : '';
                 // pageviews exclude custom events for every dimension except "event"
                 $pvFilter = $dimension === 'event' ? '' : 'AND event IS NULL';
 
