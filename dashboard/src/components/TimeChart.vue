@@ -23,9 +23,13 @@ function build() {
   if (!el.value) return
   chart?.destroy()
 
-  // hourly points carry a time component ("YYYY-MM-DD HH:00:00")
+  // hourly points carry a time component ("YYYY-MM-DD HH:00:00"), stored in UTC —
+  // parse with 'Z' so they render in the viewer's local time. Daily points are
+  // date-only: pin to local midnight so the day label doesn't shift westward.
   const hourly = (props.series[0]?.t.length ?? 0) > 10
-  const xs = props.series.map((p) => new Date(p.t.replace(' ', 'T')).getTime() / 1000)
+  const xs = props.series.map(
+    (p) => new Date(hourly ? p.t.replace(' ', 'T') + 'Z' : p.t + 'T00:00:00').getTime() / 1000
+  )
   const ys = props.series.map((p) => p[props.metric])
   // previous period aligned onto the current x axis (comparison overlay)
   const prev = props.series.map((_, i) => props.previous[i]?.[props.metric] ?? null)
