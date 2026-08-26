@@ -138,8 +138,15 @@ async function remove(id: number) {
           </button>
         </div>
       </div>
-      <button class="text-sm text-[var(--ink-3)] hover:text-[var(--ink)]" title="Open the setup assistant" @click="emit('assist')">
-        Assistant
+      <button
+        class="-my-1 flex h-7 w-7 items-center justify-center rounded-md text-[var(--ink-3)] hover:bg-[var(--bg)] hover:text-[var(--ink)]"
+        title="Open the setup assistant"
+        aria-label="Open the setup assistant"
+        @click="emit('assist')"
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="M12 2 C12.9 7.9 16.1 11.1 22 12 C16.1 12.9 12.9 16.1 12 22 C11.1 16.1 7.9 12.9 2 12 C7.9 11.1 11.1 7.9 12 2 Z" />
+        </svg>
       </button>
       <button class="text-sm text-[var(--accent)]" @click="openAdd">
         {{ formOpen ? 'Cancel' : 'Add funnel' }}
