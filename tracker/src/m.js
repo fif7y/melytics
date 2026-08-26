@@ -59,6 +59,19 @@
     history.pushState = function () { push.apply(this, arguments); send(); };
     w.addEventListener('popstate', function () { send(); });
   }
+  w.addEventListener('hashchange', function () { send(); });
+
+  // Outbound links & file downloads (capture phase so SPA routers can't swallow the click)
+  var ext = /\.(pdf|zip|gz|tar|rar|7z|dmg|exe|apk|csv|xlsx?|docx?|pptx?|txt|epub|mp3|mp4|mov|avi|webm|wav|ico)([?#]|$)/i;
+  d.addEventListener('click', function (ev) {
+    var a = ev.target && ev.target.closest && ev.target.closest('a[href]');
+    if (!a || !/^https?:/.test(a.href)) return;
+    if (ext.test(a.pathname)) send({ e: '__download', p: { url: a.href } });
+    else if (a.hostname !== loc.hostname) send({ e: '__outbound', p: { url: a.href } });
+  }, true);
+
+  // 404s: add data-404 to the snippet on the not-found template (SPAs: melytics.track('__404'))
+  if (s.hasAttribute('data-404')) send({ e: '__404' });
 
   // Web Vitals (LCP, CLS, INP, TTFB) — one '__vitals' event when the page hides
   if (w.PerformanceObserver) {
