@@ -95,6 +95,9 @@ const hidden = ref<string[]>(
   })()
 )
 const show = (key: string) => !hidden.value.includes(key)
+// Tier-2 modules only render (and fetch) when the site has tier-2 tracking on
+const TIER2_KEYS = MODULES.filter((m) => 'tier2' in m && m.tier2).map((m) => m.key)
+const visible = (key: string) => show(key) && (!TIER2_KEYS.includes(key) || (site.value?.tier2_enabled ?? false))
 
 // Drag-to-reorder breakdown cards, persisted like the hide-toggles
 const ORDER_KEY = 'melytics_order'
@@ -114,7 +117,7 @@ const orderedPanels = computed(() => {
     const i = order.value.indexOf(k)
     return i === -1 ? 100 + GRID_ITEMS.findIndex((p) => p.key === k) : i
   }
-  return GRID_ITEMS.filter((p) => show(p.key)).slice().sort((a, b) => idx(a.key) - idx(b.key))
+  return GRID_ITEMS.filter((p) => visible(p.key)).slice().sort((a, b) => idx(a.key) - idx(b.key))
 })
 const dragKey = ref<string | null>(null)
 const overKey = ref<string | null>(null)
@@ -191,9 +194,9 @@ async function load() {
     show('goals') ? api<{ goals: GoalRow[] }>(`/sites/${id}/goals?${rangeParams()}`) : null,
     show('funnels') ? api<{ funnels: FunnelRow[] }>(`/sites/${id}/funnels?${rangeParams()}`) : null,
     show('vitals') ? api<Vitals>(`/sites/${id}/vitals?${rangeParams()}`) : null,
-    show('retention') ? api<Retention>(`/sites/${id}/retention?${rangeParams()}`) : null,
-    show('cohorts') ? api<{ cohorts: CohortRow[] }>(`/sites/${id}/cohorts`) : null,
-    show('loyalty') ? api<Loyalty>(`/sites/${id}/loyalty?${rangeParams()}`) : null,
+    visible('retention') ? api<Retention>(`/sites/${id}/retention?${rangeParams()}`) : null,
+    visible('cohorts') ? api<{ cohorts: CohortRow[] }>(`/sites/${id}/cohorts`) : null,
+    visible('loyalty') ? api<Loyalty>(`/sites/${id}/loyalty?${rangeParams()}`) : null,
     ...activePanels.map((p) =>
       api<{ rows: BreakdownRow[] }>(`/sites/${id}/breakdown?dimension=${p.key}&${rangeParams()}&limit=8${filterQS()}`)
     ),
@@ -256,6 +259,8 @@ async function setTier2(on: boolean) {
     body: JSON.stringify({ tier2_enabled: on }),
   })
   sites.value = sites.value.map((s) => (s.id === updated.id ? updated : s))
+  // tier-2 modules appear/disappear with the toggle — refetch so they have data
+  if (on) load()
 }
 
 async function logout() {
