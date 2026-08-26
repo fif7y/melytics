@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { api, setToken, type BreakdownRow, type Site, type Stats } from '../lib/api'
+import { api, setToken, type Annotation, type BreakdownRow, type Site, type Stats } from '../lib/api'
 import TimeChart from '../components/TimeChart.vue'
 import BreakdownCard from '../components/BreakdownCard.vue'
 import GoalsCard, { type GoalRow } from '../components/GoalsCard.vue'
+import FunnelsCard, { type FunnelRow } from '../components/FunnelsCard.vue'
 import SharePanel from '../components/SharePanel.vue'
 
 const route = useRoute()
@@ -13,6 +14,11 @@ const router = useRouter()
 const sites = ref<Site[]>([])
 const stats = ref<Stats | null>(null)
 const goals = ref<GoalRow[]>([])
+const funnels = ref<FunnelRow[]>([])
+const annotations = ref<Annotation[]>([])
+const noting = ref(false)
+const noteDay = ref(new Date().toISOString().slice(0, 10))
+const noteText = ref('')
 const breakdowns = ref<Record<string, BreakdownRow[]>>({})
 const live = ref<number | null>(null)
 const metric = ref<'visitors' | 'pageviews'>('visitors')
@@ -56,15 +62,19 @@ async function load() {
   if (!siteId.value) return
   loading.value = true
   const id = siteId.value
-  const [s, g, ...panels] = await Promise.all([
+  const [s, g, f, a, ...panels] = await Promise.all([
     api<Stats>(`/sites/${id}/stats?${rangeParams()}`),
     api<{ goals: GoalRow[] }>(`/sites/${id}/goals?${rangeParams()}`),
+    api<{ funnels: FunnelRow[] }>(`/sites/${id}/funnels?${rangeParams()}`),
+    api<{ annotations: Annotation[] }>(`/sites/${id}/annotations?${rangeParams()}`),
     ...PANELS.map((p) =>
       api<{ rows: BreakdownRow[] }>(`/sites/${id}/breakdown?dimension=${p.key}&${rangeParams()}&limit=8`)
     ),
   ])
   stats.value = s as Stats
   goals.value = (g as { goals: GoalRow[] }).goals
+  funnels.value = (f as { funnels: FunnelRow[] }).funnels
+  annotations.value = (a as { annotations: Annotation[] }).annotations
   breakdowns.value = Object.fromEntries(PANELS.map((p, i) => [p.key, panels[i].rows]))
   loading.value = false
 }
@@ -87,6 +97,24 @@ onMounted(async () => {
 onBeforeUnmount(() => clearInterval(liveTimer))
 
 watch([siteId, rangeDays], load)
+
+async function addNote() {
+  if (!noteText.value || !siteId.value) return
+  await api(`/sites/${siteId.value}/annotations`, {
+    method: 'POST',
+    body: JSON.stringify({ day: noteDay.value, text: noteText.value }),
+  })
+  noteText.value = ''
+  noting.value = false
+  annotations.value = (
+    await api<{ annotations: Annotation[] }>(`/sites/${siteId.value}/annotations?${rangeParams()}`)
+  ).annotations
+}
+
+async function removeNote(id: number) {
+  await api(`/sites/${siteId.value}/annotations/${id}`, { method: 'DELETE' })
+  annotations.value = annotations.value.filter((a) => a.id !== id)
+}
 
 async function logout() {
   try {
@@ -155,11 +183,50 @@ async function logout() {
           >
             {{ delta >= 0 ? '↑' : '↓' }} {{ Math.abs(delta) }}% vs previous {{ rangeDays }}d
           </span>
+          <button class="ml-auto self-start text-sm text-[var(--ink-3)] hover:text-[var(--accent)]" @click="noting = !noting">
+            {{ noting ? 'Cancel' : '＋ Note' }}
+          </button>
         </div>
-        <TimeChart :series="stats.series" :previous="stats.previous_series" :metric="metric" />
+
+        <form v-if="noting" class="flex gap-2 mb-3" @submit.prevent="addNote">
+          <input
+            v-model="noteDay"
+            type="date"
+            class="rounded-lg px-3 py-1.5 text-sm bg-[var(--bg)] outline-none focus:ring-2 ring-[var(--accent)]"
+          />
+          <input
+            v-model="noteText"
+            placeholder="What happened? (deploy, launch, campaign…)"
+            class="flex-1 rounded-lg px-3 py-1.5 text-sm bg-[var(--bg)] outline-none focus:ring-2 ring-[var(--accent)] placeholder:text-[var(--ink-3)]"
+          />
+          <button class="rounded-lg px-3 py-1.5 text-sm text-white bg-[var(--accent)]">Save</button>
+        </form>
+
+        <TimeChart :series="stats.series" :previous="stats.previous_series" :metric="metric" :annotations="annotations" />
+
+        <div v-if="annotations.length" class="mt-2 flex flex-wrap gap-1.5">
+          <span
+            v-for="a in annotations"
+            :key="a.id"
+            class="group flex items-center gap-1.5 rounded-full bg-[var(--bg)] px-2.5 py-0.5 text-xs text-[var(--ink-2)]"
+          >
+            <span class="text-[var(--ink-3)]">{{ a.day.slice(5) }}</span>
+            {{ a.text }}
+            <button
+              class="opacity-0 group-hover:opacity-100 text-[var(--ink-3)] hover:text-[var(--down)]"
+              title="Delete note"
+              @click="removeNote(a.id)"
+            >
+              ×
+            </button>
+          </span>
+        </div>
       </section>
 
-      <GoalsCard :site-id="siteId" :goals="goals" @changed="load" />
+      <div class="grid gap-5 lg:grid-cols-2">
+        <GoalsCard :site-id="siteId" :goals="goals" @changed="load" />
+        <FunnelsCard :site-id="siteId" :funnels="funnels" @changed="load" />
+      </div>
 
       <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
         <BreakdownCard

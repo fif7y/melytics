@@ -64,6 +64,52 @@ class Stats
         })->all();
     }
 
+    /**
+     * Per-step visitor counts for a funnel, requiring steps in order:
+     * a visitor counts for step N only if they matched steps 1..N-1 first,
+     * each at or before the time they matched step N.
+     *
+     * @param  array<int, array{name?: string, event?: ?string, path_pattern?: ?string}>  $steps
+     * @return array<int, array{name: string, visitors: int, rate: float}>
+     */
+    public function funnel(Site $site, array $steps, Carbon $from, Carbon $to): array
+    {
+        // visitor_hash => earliest time they reached the previous step
+        $reached = null;
+        $entered = 1;
+        $out = [];
+
+        foreach ($steps as $i => $step) {
+            $q = DB::table('hits')->where('site_id', $site->id)
+                ->whereBetween('created_at', [$from, $to->copy()->endOfDay()]);
+            if (! empty($step['event'])) {
+                $q->where('event', $step['event']);
+            } else {
+                $q->whereNull('event')->where('path', 'like', str_replace('*', '%', $step['path_pattern'] ?? '/'));
+            }
+            $times = $q->groupBy('visitor_hash')
+                ->selectRaw('visitor_hash, MIN(created_at) as t')
+                ->pluck('t', 'visitor_hash');
+
+            if ($reached !== null) {
+                $times = $times->filter(fn ($t, $v) => isset($reached[$v]) && $t >= $reached[$v]);
+            }
+            $reached = $times->all();
+
+            $count = count($reached);
+            if ($i === 0) {
+                $entered = max($count, 1);
+            }
+            $out[] = [
+                'name' => $step['name'] ?? ($step['event'] ?? $step['path_pattern'] ?? 'step '.($i + 1)),
+                'visitors' => $count,
+                'rate' => round($count / $entered * 100, 1),
+            ];
+        }
+
+        return $out;
+    }
+
     public function series(int $siteId, Carbon $from, Carbon $to, string $interval)
     {
         $table = $interval === 'hour' ? 'rollup_hourly' : 'rollup_daily';

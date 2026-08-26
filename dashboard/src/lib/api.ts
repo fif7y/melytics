@@ -58,6 +58,11 @@ export interface Site {
   domain: string
   key: string
 }
+export interface Annotation {
+  id: number
+  day: string
+  text: string
+}
 export interface BreakdownRow {
   value: string
   pageviews: number

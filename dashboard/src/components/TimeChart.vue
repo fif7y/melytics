@@ -2,12 +2,13 @@
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import uPlot from 'uplot'
 import 'uplot/dist/uPlot.min.css'
-import type { SeriesPoint } from '../lib/api'
+import type { Annotation, SeriesPoint } from '../lib/api'
 
 const props = defineProps<{
   series: SeriesPoint[]
   previous: SeriesPoint[]
   metric: 'visitors' | 'pageviews'
+  annotations?: Annotation[]
 }>()
 
 const el = ref<HTMLDivElement>()
@@ -30,6 +31,13 @@ function build() {
   const accent = cssVar('--accent')
   const compare = cssVar('--compare')
   const ink3 = cssVar('--ink-3')
+
+  // day (YYYY-MM-DD) -> joined annotation text, for markers + tooltip
+  const notes = new Map<string, string>()
+  for (const a of props.annotations ?? []) {
+    notes.set(a.day, notes.has(a.day) ? `${notes.get(a.day)} · ${a.text}` : a.text)
+  }
+  const days = props.series.map((p) => p.t.slice(0, 10))
 
   chart = new uPlot(
     {
@@ -69,6 +77,27 @@ function build() {
         },
       ],
       hooks: {
+        draw: [
+          (u) => {
+            const { ctx } = u
+            ctx.save()
+            ctx.strokeStyle = ink3
+            ctx.fillStyle = ink3
+            ctx.setLineDash([3, 4])
+            days.forEach((day, i) => {
+              if (!notes.has(day)) return
+              const x = u.valToPos(xs[i], 'x', true)
+              ctx.beginPath()
+              ctx.moveTo(x, u.bbox.top)
+              ctx.lineTo(x, u.bbox.top + u.bbox.height)
+              ctx.stroke()
+              ctx.beginPath()
+              ctx.arc(x, u.bbox.top + 5, 3.5, 0, Math.PI * 2)
+              ctx.fill()
+            })
+            ctx.restore()
+          },
+        ],
         setCursor: [
           (u) => {
             if (!tip.value) return
@@ -83,7 +112,8 @@ function build() {
             tip.value.innerHTML =
               `<span style="color:var(--ink-3)">${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span> ` +
               `<b>${cur.toLocaleString()}</b>` +
-              (pre != null ? ` <span style="color:var(--ink-3)">vs ${pre.toLocaleString()}</span>` : '')
+              (pre != null ? ` <span style="color:var(--ink-3)">vs ${pre.toLocaleString()}</span>` : '') +
+              (notes.has(days[i]) ? `<br><span style="color:var(--ink-2)">📌 ${notes.get(days[i])}</span>` : '')
             tip.value.style.opacity = '1'
             tip.value.style.left = `${u.cursor.left}px`
           },
@@ -106,7 +136,7 @@ onMounted(() => {
   })
 })
 
-watch(() => [props.series, props.metric], build, { deep: true })
+watch(() => [props.series, props.metric, props.annotations], build, { deep: true })
 </script>
 
 <template>

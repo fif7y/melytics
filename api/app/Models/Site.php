@@ -35,6 +35,16 @@ class Site extends Model
         return $this->hasMany(Goal::class);
     }
 
+    public function funnels(): HasMany
+    {
+        return $this->hasMany(Funnel::class);
+    }
+
+    public function annotations(): HasMany
+    {
+        return $this->hasMany(Annotation::class);
+    }
+
     public function shareLink(): \Illuminate\Database\Eloquent\Relations\HasOne
     {
         return $this->hasOne(ShareLink::class);

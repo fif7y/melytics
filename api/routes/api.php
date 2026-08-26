@@ -1,6 +1,8 @@
 <?php
 
+use App\Http\Controllers\AnnotationController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\FunnelController;
 use App\Http\Controllers\GoalController;
 use App\Http\Controllers\IngestController;
 use App\Http\Controllers\PublicShareController;
@@ -28,6 +30,14 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::post('/sites/{site}/goals', [GoalController::class, 'store']);
     Route::delete('/sites/{site}/goals/{goal}', [GoalController::class, 'destroy']);
+
+    Route::get('/sites/{site}/funnels', [FunnelController::class, 'index']);
+    Route::post('/sites/{site}/funnels', [FunnelController::class, 'store']);
+    Route::delete('/sites/{site}/funnels/{funnel}', [FunnelController::class, 'destroy']);
+
+    Route::get('/sites/{site}/annotations', [AnnotationController::class, 'index']);
+    Route::post('/sites/{site}/annotations', [AnnotationController::class, 'store']);
+    Route::delete('/sites/{site}/annotations/{annotation}', [AnnotationController::class, 'destroy']);
 
     Route::get('/sites/{site}/share', [ShareLinkController::class, 'show']);
     Route::patch('/sites/{site}/share', [ShareLinkController::class, 'update']);
