@@ -15,6 +15,7 @@ class SiteController extends Controller
 
     public function store(Request $request): JsonResponse
     {
+        abort_unless((bool) $request->user()->email_verified_at, 403, 'Verify your email to add sites.');
         $data = $request->validate([
             'name' => 'required|string|max:255',
             'domain' => 'required|string|max:255',
@@ -33,6 +34,8 @@ class SiteController extends Controller
             'timezone' => 'sometimes|timezone',
             'retention_days' => 'sometimes|integer|min:1|max:3650',
             'tier2_enabled' => 'sometimes|boolean',
+            'digest_enabled' => 'sometimes|boolean',
+            'alerts_enabled' => 'sometimes|boolean',
         ]);
         $site->update($data);
 

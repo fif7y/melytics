@@ -16,10 +16,16 @@ Route::post('/echo', IngestController::class);
 Route::get('/echo.gif', [IngestController::class, 'pixel']);
 
 Route::post('/auth/login', [AuthController::class, 'login'])->middleware('throttle:10,1');
+Route::post('/auth/register', [AuthController::class, 'register'])->middleware('throttle:5,1');
+Route::post('/auth/forgot', [AuthController::class, 'forgot'])->middleware('throttle:5,1');
+Route::post('/auth/reset', [AuthController::class, 'reset'])->middleware('throttle:5,1');
+Route::get('/auth/verify/{id}/{hash}', [AuthController::class, 'verify'])
+    ->middleware(['signed', 'throttle:10,1'])->name('verification.verify');
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/auth/logout', [AuthController::class, 'logout']);
     Route::get('/auth/me', [AuthController::class, 'me']);
+    Route::post('/auth/resend-verification', [AuthController::class, 'resendVerification'])->middleware('throttle:5,1');
 
     Route::apiResource('sites', SiteController::class)->except('show');
 

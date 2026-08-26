@@ -34,7 +34,7 @@
     @endforeach
 
     <p style="font-size:13px;color:#8a8984;margin-top:24px;">
-        <a href="https://stats.fif7y.com" style="color:#2a78d6;text-decoration:none;">Open dashboard</a>
+        <a href="{{ config('app.url') }}" style="color:#2a78d6;text-decoration:none;">Open dashboard</a>
         · You get at most one of these per day.
     </p>
 </div>

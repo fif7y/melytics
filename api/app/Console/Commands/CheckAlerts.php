@@ -28,7 +28,7 @@ class CheckAlerts extends Command
 
     public function handle(Stats $stats): int
     {
-        foreach (Site::all() as $site) {
+        foreach (Site::where('alerts_enabled', true)->get() as $site) {
             $now = now($site->timezone);
             if ($now->hour < self::MIN_HOUR) {
                 continue;

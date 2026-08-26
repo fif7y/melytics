@@ -36,7 +36,11 @@ export async function api<T = unknown>(path: string, init: RequestInit = {}): Pr
     location.hash = '#/login'
     throw new Error('unauthenticated')
   }
-  if (!res.ok) throw new Error(`API ${res.status}`)
+  if (!res.ok) {
+    // Surface the server's message (validation / gate errors) when it has one
+    const msg = await res.json().then((b) => b?.message).catch(() => null)
+    throw new Error(msg || `API ${res.status}`)
+  }
   return res.json()
 }
 
@@ -67,7 +71,16 @@ export interface Site {
   name: string
   domain: string
   key: string
+  timezone: string
   tier2_enabled: boolean
+  digest_enabled: boolean
+  alerts_enabled: boolean
+}
+export interface Me {
+  id: number
+  name: string
+  email: string
+  verified: boolean
 }
 export interface Retention {
   identified: number

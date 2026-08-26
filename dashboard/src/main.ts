@@ -14,13 +14,14 @@ const router = createRouter({
   history: createWebHashHistory(),
   routes: [
     { path: '/login', component: Login },
+    { path: '/reset', component: Login },
     { path: '/share/:token', component: Share },
     { path: '/:siteId?', component: Dashboard },
   ],
 })
 
 router.beforeEach((to) => {
-  if (to.path !== '/login' && !to.path.startsWith('/share/') && !token()) return '/login'
+  if (to.path !== '/login' && to.path !== '/reset' && !to.path.startsWith('/share/') && !token()) return '/login'
 })
 
 createApp(App).use(router).mount('#app')

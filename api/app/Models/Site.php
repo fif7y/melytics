@@ -9,7 +9,7 @@ use Illuminate\Support\Str;
 
 class Site extends Model
 {
-    protected $fillable = ['name', 'domain', 'timezone', 'retention_days', 'tier2_enabled'];
+    protected $fillable = ['name', 'domain', 'timezone', 'retention_days', 'tier2_enabled', 'digest_enabled', 'alerts_enabled'];
 
     protected $casts = ['tier2_enabled' => 'bool'];
 

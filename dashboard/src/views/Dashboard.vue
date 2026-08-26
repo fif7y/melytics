@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { api, setToken, type Annotation, type Attribution, type BreakdownRow, type CohortRow, type Loyalty, type Retention, type Site, type Stats, type TimeToConvert } from '../lib/api'
+import { api, setToken, type Annotation, type Attribution, type BreakdownRow, type CohortRow, type Loyalty, type Me, type Retention, type Site, type Stats, type TimeToConvert } from '../lib/api'
 import TimeChart from '../components/TimeChart.vue'
 import BreakdownCard from '../components/BreakdownCard.vue'
 import StatStrip from '../components/StatStrip.vue'
@@ -189,7 +189,10 @@ const filterLabel = computed(() => {
 })
 
 async function load() {
-  if (!siteId.value) return
+  if (!siteId.value) {
+    loading.value = false
+    return
+  }
   loading.value = true
   const id = siteId.value
   // hidden modules are not fetched at all (funnels especially are heavier queries)
@@ -235,11 +238,49 @@ async function pollLive() {
 let liveTimer: ReturnType<typeof setInterval>
 
 onMounted(async () => {
-  sites.value = await api<Site[]>('/sites')
+  ;[sites.value, me.value] = await Promise.all([api<Site[]>('/sites'), api<Me>('/auth/me')])
   await load()
   await pollLive()
   liveTimer = setInterval(pollLive, 15_000)
 })
+
+const me = ref<Me | null>(null)
+const resent = ref(false)
+async function resendVerification() {
+  await api('/auth/resend-verification', { method: 'POST' })
+  resent.value = true
+}
+
+async function setNotify(field: 'digest_enabled' | 'alerts_enabled', on: boolean) {
+  if (!site.value) return
+  const updated = await api<Site>(`/sites/${site.value.id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ [field]: on }),
+  })
+  sites.value = sites.value.map((s) => (s.id === updated.id ? updated : s))
+}
+
+async function addSite(payload: { name: string; domain: string }) {
+  try {
+    const created = await api<Site>('/sites', {
+      method: 'POST',
+      body: JSON.stringify({ ...payload, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
+    })
+    sites.value = [...sites.value, created]
+    router.push(`/${created.id}`)
+  } catch (e) {
+    alert(e instanceof Error ? e.message : 'Could not create site')
+  }
+}
+
+async function deleteSite() {
+  if (!site.value) return
+  const s = site.value
+  if (!confirm(`Delete ${s.domain} and ALL its analytics data? This cannot be undone.`)) return
+  await api(`/sites/${s.id}`, { method: 'DELETE' })
+  sites.value = sites.value.filter((x) => x.id !== s.id)
+  router.push(sites.value.length ? `/${sites.value[0].id}` : '/')
+}
 onBeforeUnmount(() => clearInterval(liveTimer))
 
 watch([siteId, rangeDays, filter], load)
@@ -341,15 +382,39 @@ async function logout() {
           :hidden="hidden"
           :density="density"
           :tier2="site?.tier2_enabled ?? false"
+          :site="site ?? null"
           @toggle="toggleModule"
           @density="setDensity"
           @tier2="setTier2"
+          @notify="setNotify"
+          @add-site="addSite"
+          @delete-site="deleteSite"
           @signout="logout"
         />
       </div>
     </header>
 
-    <main v-if="stats" class="space-y-5" :class="{ compact: density === 'compact' }">
+    <div
+      v-if="me && !me.verified"
+      class="mb-6 flex flex-wrap items-center gap-3 rounded-[14px] bg-[var(--accent-soft)] px-4 py-3 text-sm"
+    >
+      <span>Verify your email to add sites — we sent a link to <b>{{ me.email }}</b>.</span>
+      <button
+        v-if="!resent"
+        class="font-medium text-[var(--accent)] hover:opacity-80"
+        @click="resendVerification"
+      >
+        Resend
+      </button>
+      <span v-else class="text-[var(--ink-3)]">Sent again — check your inbox.</span>
+    </div>
+
+    <main v-if="!loading && !sites.length" class="mx-auto max-w-sm py-24 text-center">
+      <h2 class="mb-2 text-lg font-semibold">Add your first site</h2>
+      <p class="mb-6 text-sm text-[var(--ink-3)]">Create a site in Settings (top right), paste the snippet, and stats appear within a minute.</p>
+    </main>
+
+    <main v-else-if="stats" class="space-y-5" :class="{ compact: density === 'compact' }">
       <StatStrip :stats="stats" :metric="metric" :live="live" @update:metric="metric = $event" />
 
       <section class="card p-5">
