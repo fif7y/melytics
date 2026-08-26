@@ -487,6 +487,138 @@ class Stats
         ];
     }
 
+    /**
+     * Consented visitors whose first hit matching any goal falls inside the range.
+     *
+     * @return array<string, string> visitor_id => first conversion time (UTC)
+     */
+    private function convertingVisitors(Site $site, Carbon $from, Carbon $to): array
+    {
+        $goals = $site->goals;
+        if ($goals->isEmpty()) {
+            return [];
+        }
+
+        $rows = DB::table('hits')
+            ->where('site_id', $site->id)
+            ->whereNotNull('visitor_id')
+            ->where(function ($q) use ($goals) {
+                foreach ($goals as $g) {
+                    $q->orWhere(fn ($w) => $g->event
+                        ? $w->where('event', $g->event)
+                        : $w->whereNull('event')->where('path', 'like', str_replace('*', '%', $g->path_pattern)));
+                }
+            })
+            ->groupBy('visitor_id')
+            ->selectRaw('visitor_id, MIN(created_at) as first_conv')
+            ->get();
+
+        [$f, $t] = self::utcBounds($from, $to);
+
+        return $rows
+            ->filter(fn ($r) => $r->first_conv >= $f->toDateTimeString() && $r->first_conv <= $t->toDateTimeString())
+            ->pluck('first_conv', 'visitor_id')
+            ->all();
+    }
+
+    /**
+     * Tier-2 first-touch attribution: converting consented visitors credited to
+     * the channel of their first-ever visit (not the converting session).
+     *
+     * @return array{identified: int, channels: array<int, array{channel: string, visitors: int}>}
+     */
+    public function attribution(Site $site, Carbon $from, Carbon $to): array
+    {
+        $conv = $this->convertingVisitors($site, $from, $to);
+        if (! $conv) {
+            return ['identified' => 0, 'channels' => []];
+        }
+
+        // SQLite: bare columns follow the MIN(id) row (same trick as live())
+        $firsts = DB::table('hits')
+            ->where('site_id', $site->id)
+            ->whereIn('visitor_id', array_keys($conv))
+            ->groupBy('visitor_id')
+            ->selectRaw('visitor_id, referrer_host, MIN(id)')
+            ->get();
+
+        $out = [];
+        foreach ($firsts as $r) {
+            $c = self::channel($r->referrer_host ?: null);
+            $out[$c] = ($out[$c] ?? 0) + 1;
+        }
+        arsort($out);
+
+        return [
+            'identified' => count($conv),
+            'channels' => array_map(fn ($c, $n) => ['channel' => $c, 'visitors' => $n], array_keys($out), $out),
+        ];
+    }
+
+    /**
+     * Tier-2 time to conversion: days and sessions between a consented visitor's
+     * first-ever visit and their first goal hit.
+     *
+     * @return array{identified: int, median_days: float, median_sessions: float, buckets: array<int, array{label: string, visitors: int}>}
+     */
+    public function timeToConvert(Site $site, Carbon $from, Carbon $to): array
+    {
+        $buckets = [
+            ['label' => 'Same day', 'max' => 1, 'visitors' => 0],
+            ['label' => '1–7d', 'max' => 7, 'visitors' => 0],
+            ['label' => '8–30d', 'max' => 30, 'visitors' => 0],
+            ['label' => '30d+', 'max' => PHP_FLOAT_MAX, 'visitors' => 0],
+        ];
+        $conv = $this->convertingVisitors($site, $from, $to);
+        if (! $conv) {
+            return ['identified' => 0, 'median_days' => 0.0, 'median_sessions' => 0.0,
+                'buckets' => array_map(fn ($b) => ['label' => $b['label'], 'visitors' => 0], $buckets)];
+        }
+
+        $hits = DB::table('hits')
+            ->where('site_id', $site->id)
+            ->whereIn('visitor_id', array_keys($conv))
+            ->orderBy('created_at')
+            ->get(['visitor_id', 'created_at'])
+            ->groupBy('visitor_id');
+
+        $days = [];
+        $sessions = [];
+        foreach ($conv as $id => $firstConv) {
+            $ts = $hits[$id]->pluck('created_at')->filter(fn ($t) => $t <= $firstConv)->values();
+            $days[] = (strtotime($firstConv) - strtotime($ts[0])) / 86400;
+            $n = 1;
+            for ($i = 1; $i < count($ts); $i++) {
+                if (strtotime($ts[$i]) - strtotime($ts[$i - 1]) > 1800) {
+                    $n++;
+                }
+            }
+            $sessions[] = $n;
+        }
+        foreach ($days as $d) {
+            foreach ($buckets as &$b) {
+                if ($d < $b['max']) {
+                    $b['visitors']++;
+                    break;
+                }
+            }
+            unset($b);
+        }
+
+        $median = function (array $vals): float {
+            sort($vals);
+            $n = count($vals);
+            return $n % 2 ? $vals[intdiv($n, 2)] : ($vals[$n / 2 - 1] + $vals[$n / 2]) / 2;
+        };
+
+        return [
+            'identified' => count($conv),
+            'median_days' => round($median($days), 1),
+            'median_sessions' => round($median($sessions), 1),
+            'buckets' => array_map(fn ($b) => ['label' => $b['label'], 'visitors' => $b['visitors']], $buckets),
+        ];
+    }
+
     /** @param array{dimension: string, value: string}|null $filter */
     public function series(int $siteId, Carbon $from, Carbon $to, string $interval, ?array $filter = null, int $offsetMin = 0)
     {

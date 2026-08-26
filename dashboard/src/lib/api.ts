@@ -84,6 +84,16 @@ export interface Loyalty {
   avg: number
   buckets: { label: string; visitors: number }[]
 }
+export interface Attribution {
+  identified: number
+  channels: { channel: string; visitors: number }[]
+}
+export interface TimeToConvert {
+  identified: number
+  median_days: number
+  median_sessions: number
+  buckets: { label: string; visitors: number }[]
+}
 export interface Annotation {
   id: number
   day: string

@@ -87,6 +87,22 @@ class StatsController extends Controller
         return response()->json($this->stats->loyalty($site, $from, $to));
     }
 
+    public function attribution(Request $request, Site $site): JsonResponse
+    {
+        $this->authorizeSite($request, $site);
+        [$from, $to] = $this->stats->range($request->query('from'), $request->query('to'), null, $site->timezone);
+
+        return response()->json($this->stats->attribution($site, $from, $to));
+    }
+
+    public function timeToConvert(Request $request, Site $site): JsonResponse
+    {
+        $this->authorizeSite($request, $site);
+        [$from, $to] = $this->stats->range($request->query('from'), $request->query('to'), null, $site->timezone);
+
+        return response()->json($this->stats->timeToConvert($site, $from, $to));
+    }
+
     public function live(Request $request, Site $site): JsonResponse
     {
         $this->authorizeSite($request, $site);
