@@ -70,8 +70,11 @@
     else if (a.hostname !== loc.hostname) send({ e: '__outbound', p: { url: a.href } });
   }, true);
 
-  // 404s: add data-404 to the snippet on the not-found template (SPAs: melytics.track('__404'))
-  if (s.hasAttribute('data-404')) send({ e: '__404' });
+  // 404s: add data-404 to the snippet on the not-found template (SPAs: melytics.track('__404')).
+  // Only the __404 event is sent — no pageview or ping, so probed junk paths
+  // stay out of pages/entry/exit and Live.
+  var nf = s.hasAttribute('data-404');
+  if (nf) send({ e: '__404' });
 
   // Web Vitals (LCP, CLS, INP, TTFB) — one '__vitals' event when the page hides
   if (w.PerformanceObserver) {
@@ -110,10 +113,11 @@
 
   // Heartbeat: keeps "Live now" honest while a visible tab idles on one page
   setInterval(function () {
-    if (d.visibilityState === 'visible') send({ e: '__ping' });
+    if (!nf && d.visibilityState === 'visible') send({ e: '__ping' });
   }, 120000);
 
   // Initial pageview (after paint so we never block)
+  if (nf) return;
   if (d.visibilityState === 'prerender') {
     d.addEventListener('visibilitychange', function f() {
       if (d.visibilityState === 'visible') { d.removeEventListener('visibilitychange', f); send(); }
