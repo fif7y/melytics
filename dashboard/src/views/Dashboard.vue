@@ -142,14 +142,26 @@ const orderedModules = computed(() => {
   }
   return MODULES.slice().sort((a, b) => idx(a.key) - idx(b.key))
 })
-function dropOn(target: string) {
-  if (!dragKey.value || dragKey.value === target) return
-  const keys = orderedPanels.value.map((p) => p.key)
-  keys.splice(keys.indexOf(target), 0, keys.splice(keys.indexOf(dragKey.value), 1)[0])
+// Move one grid card before another in the persisted order. Operates on the
+// full ordered key list (hidden cards included) so both drag surfaces — the
+// grid and the settings list — write the same store.
+function moveKey(from: string, to: string) {
+  // goals/funnels live in a fixed row above the grid — not reorderable
+  if (from === to || !GRID_ITEMS.some((p) => p.key === from) || !GRID_ITEMS.some((p) => p.key === to)) return
+  const idx = (k: string) => {
+    const i = order.value.indexOf(k)
+    return i === -1 ? 100 + GRID_ITEMS.findIndex((p) => p.key === k) : i
+  }
+  const keys = GRID_ITEMS.map((p) => p.key).sort((a, b) => idx(a) - idx(b))
+  keys.splice(keys.indexOf(to), 0, keys.splice(keys.indexOf(from), 1)[0])
   order.value = keys
   try {
     localStorage.setItem(ORDER_KEY, JSON.stringify(keys))
   } catch {}
+}
+
+function dropOn(target: string) {
+  if (dragKey.value) moveKey(dragKey.value, target)
 }
 
 // Density: compact tightens card padding and row spacing
@@ -400,6 +412,7 @@ async function logout() {
           @toggle="toggleModule"
           @density="setDensity"
           @tier2="setTier2"
+          @reorder="moveKey"
         />
         <AccountPanel
           :site="site ?? null"

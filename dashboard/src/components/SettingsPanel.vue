@@ -13,6 +13,7 @@ const emit = defineEmits<{
   toggle: [key: string]
   density: [d: 'comfy' | 'compact']
   tier2: [on: boolean]
+  reorder: [from: string, to: string]
 }>()
 
 const open = ref(false)
@@ -20,6 +21,23 @@ const open = ref(false)
 // Tier-2-dependent modules group at the bottom so the dependency is visible
 const baseModules = computed(() => props.modules.filter((m) => !m.tier2))
 const tier2Modules = computed(() => props.modules.filter((m) => m.tier2))
+
+// Drag-to-reorder rows, same order store as the dashboard grid. Drags stay
+// within their group (base vs tier-2) so the grouping never lies.
+const dragKey = ref<string | null>(null)
+const dragGroup = ref<'base' | 'tier2' | null>(null)
+const overKey = ref<string | null>(null)
+
+function startDrag(key: string, group: 'base' | 'tier2') {
+  dragKey.value = key
+  dragGroup.value = group
+}
+function dropOn(key: string, group: 'base' | 'tier2') {
+  if (dragKey.value && dragGroup.value === group && dragKey.value !== key) emit('reorder', dragKey.value, key)
+  dragKey.value = null
+  dragGroup.value = null
+  overKey.value = null
+}
 
 function onKey(e: KeyboardEvent) {
   if (e.key === 'Escape') open.value = false
@@ -69,23 +87,36 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey))
         <div class="flex-1 space-y-6 overflow-y-auto px-5 pb-5">
           <section>
             <div class="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--ink-3)]">Modules</div>
-            <Toggle
+            <div
               v-for="m in baseModules"
               :key="m.key"
-              :label="m.label"
-              :on="!props.hidden.includes(m.key)"
-              @change="emit('toggle', m.key)"
-            />
+              draggable="true"
+              class="rounded-lg transition-opacity"
+              :class="{ 'opacity-40': dragKey === m.key, 'ring-2 ring-[var(--accent)]': overKey === m.key && dragKey && dragKey !== m.key }"
+              @dragstart="startDrag(m.key, 'base')"
+              @dragend=";(dragKey = null), (overKey = null)"
+              @dragover.prevent="overKey = m.key"
+              @dragleave="overKey === m.key && (overKey = null)"
+              @drop.prevent="dropOn(m.key, 'base')"
+            >
+              <Toggle :label="m.label" :on="!props.hidden.includes(m.key)" @change="emit('toggle', m.key)" />
+            </div>
             <template v-if="tier2Modules.length">
               <div class="mt-3 mb-1 px-2 text-xs text-[var(--ink-3)]">Needs Tier-2 tracking</div>
-              <Toggle
+              <div
                 v-for="m in tier2Modules"
                 :key="m.key"
-                :label="m.label"
-                :on="!props.hidden.includes(m.key)"
-                :dim="!props.tier2"
-                @change="emit('toggle', m.key)"
-              />
+                draggable="true"
+                class="rounded-lg transition-opacity"
+                :class="{ 'opacity-40': dragKey === m.key, 'ring-2 ring-[var(--accent)]': overKey === m.key && dragKey && dragKey !== m.key }"
+                @dragstart="startDrag(m.key, 'tier2')"
+                @dragend=";(dragKey = null), (overKey = null)"
+                @dragover.prevent="overKey = m.key"
+                @dragleave="overKey === m.key && (overKey = null)"
+                @drop.prevent="dropOn(m.key, 'tier2')"
+              >
+                <Toggle :label="m.label" :on="!props.hidden.includes(m.key)" :dim="!props.tier2" @change="emit('toggle', m.key)" />
+              </div>
             </template>
             <p class="mt-1 px-2 text-xs text-[var(--ink-3)]">Hidden modules aren't fetched at all.</p>
           </section>
