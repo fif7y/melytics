@@ -16,6 +16,7 @@ import TimeToConvertCard from '../components/TimeToConvertCard.vue'
 import SharePanel from '../components/SharePanel.vue'
 import { theme, toggleTheme, effectiveTheme } from '../lib/theme'
 import SettingsPanel from '../components/SettingsPanel.vue'
+import AccountPanel from '../components/AccountPanel.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -382,10 +383,13 @@ async function logout() {
           :hidden="hidden"
           :density="density"
           :tier2="site?.tier2_enabled ?? false"
-          :site="site ?? null"
           @toggle="toggleModule"
           @density="setDensity"
           @tier2="setTier2"
+        />
+        <AccountPanel
+          :site="site ?? null"
+          :me="me"
           @notify="setNotify"
           @add-site="addSite"
           @delete-site="deleteSite"
