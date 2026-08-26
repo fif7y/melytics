@@ -97,17 +97,25 @@ async function remove(id: number) {
           ×
         </button>
       </div>
-      <div class="space-y-1.5">
-        <div v-for="(s, i) in f.steps" :key="i" class="flex items-center gap-3">
-          <span class="w-32 truncate text-sm text-[var(--ink-2)]" :title="s.name">{{ s.name }}</span>
-          <div class="relative h-6 flex-1 rounded-md bg-[var(--bg)] overflow-hidden">
-            <div
-              class="absolute inset-y-0 left-0 rounded-md bg-[var(--accent-soft)]"
-              :style="{ width: `${Math.max(s.rate, 1)}%` }"
-            />
+      <div class="flex items-end gap-1 pt-6">
+        <div v-for="(s, i) in f.steps" :key="i" class="group/step relative min-w-0 flex-1">
+          <div
+            v-if="i && f.steps[i - 1].visitors"
+            class="absolute -top-5 left-1/2 -translate-x-1/2 whitespace-nowrap text-xs tabular-nums text-[var(--down)] opacity-0 transition-opacity group-hover/step:opacity-100"
+          >
+            −{{ 100 - Math.round((s.visitors / f.steps[i - 1].visitors) * 100) }}% drop
           </div>
-          <span class="w-16 text-right text-sm tabular-nums">{{ s.visitors.toLocaleString() }}</span>
-          <span class="w-14 text-right text-sm tabular-nums text-[var(--ink-2)]">{{ s.rate }}%</span>
+          <div
+            class="mx-auto w-3/4 rounded-t-md bg-[var(--accent)] opacity-85 transition-opacity group-hover/step:opacity-100"
+            :style="{ height: `${Math.max(6, s.rate * 1.1)}px` }"
+          />
+        </div>
+      </div>
+      <div class="h-px bg-[color-mix(in_srgb,var(--ink)_12%,transparent)]" />
+      <div class="mt-1.5 flex gap-1">
+        <div v-for="(s, i) in f.steps" :key="i" class="min-w-0 flex-1 text-center">
+          <div class="text-sm font-semibold tabular-nums">{{ s.visitors.toLocaleString() }}</div>
+          <div class="truncate text-xs text-[var(--ink-3)]" :title="s.name">{{ s.name }}</div>
         </div>
       </div>
     </div>

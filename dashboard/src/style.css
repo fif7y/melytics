@@ -57,3 +57,12 @@ body {
 .u-legend {
   display: none;
 }
+
+/* Compact density (⚙ → Density): tighter cards and rows */
+.compact .card {
+  padding: 0.85rem 1rem;
+}
+.compact .card ul li {
+  padding-top: 0.2rem;
+  padding-bottom: 0.2rem;
+}

@@ -3,7 +3,8 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api, setToken, type Annotation, type BreakdownRow, type Site, type Stats } from '../lib/api'
 import TimeChart from '../components/TimeChart.vue'
-import BreakdownPanel from '../components/BreakdownPanel.vue'
+import BreakdownCard from '../components/BreakdownCard.vue'
+import StatStrip from '../components/StatStrip.vue'
 import GoalsCard, { type GoalRow } from '../components/GoalsCard.vue'
 import FunnelsCard, { type FunnelRow } from '../components/FunnelsCard.vue'
 import VitalsCard, { type Vitals } from '../components/VitalsCard.vue'
@@ -61,6 +62,46 @@ const hidden = ref<string[]>(
   })()
 )
 const show = (key: string) => !hidden.value.includes(key)
+
+// Drag-to-reorder breakdown cards, persisted like the hide-toggles
+const ORDER_KEY = 'melytics_order'
+const order = ref<string[]>(
+  (() => {
+    try {
+      return JSON.parse(localStorage.getItem(ORDER_KEY) ?? '[]')
+    } catch {
+      return []
+    }
+  })()
+)
+const orderedPanels = computed(() => {
+  const idx = (k: string) => {
+    const i = order.value.indexOf(k)
+    return i === -1 ? 100 + PANELS.findIndex((p) => p.key === k) : i
+  }
+  return PANELS.filter((p) => show(p.key)).slice().sort((a, b) => idx(a.key) - idx(b.key))
+})
+const dragKey = ref<string | null>(null)
+const overKey = ref<string | null>(null)
+function dropOn(target: string) {
+  if (!dragKey.value || dragKey.value === target) return
+  const keys = orderedPanels.value.map((p) => p.key)
+  keys.splice(keys.indexOf(target), 0, keys.splice(keys.indexOf(dragKey.value), 1)[0])
+  order.value = keys
+  try {
+    localStorage.setItem(ORDER_KEY, JSON.stringify(keys))
+  } catch {}
+}
+
+// Density: compact tightens card padding and row spacing
+const DENSITY_KEY = 'melytics_density'
+const density = ref<'comfy' | 'compact'>(localStorage.getItem(DENSITY_KEY) === 'compact' ? 'compact' : 'comfy')
+function setDensity(d: 'comfy' | 'compact') {
+  density.value = d
+  try {
+    localStorage.setItem(DENSITY_KEY, d)
+  } catch {}
+}
 
 function toggleModule(key: string) {
   hidden.value = show(key) ? [...hidden.value, key] : hidden.value.filter((k) => k !== key)
@@ -187,11 +228,6 @@ async function logout() {
       </select>
       <span v-else-if="site" class="text-sm text-[var(--ink-2)]">{{ site.domain }}</span>
 
-      <span v-if="live !== null" class="flex items-center gap-1.5 text-sm text-[var(--ink-2)]">
-        <span class="h-2 w-2 rounded-full bg-[var(--up)]" :class="{ 'animate-pulse': live > 0 }" />
-        {{ live }} online
-      </span>
-
       <span
         v-if="filter"
         class="flex items-center gap-1.5 rounded-full bg-[var(--accent-soft)] px-3 py-1 text-sm font-medium text-[var(--accent)]"
@@ -213,32 +249,17 @@ async function logout() {
       </div>
 
       <SharePanel v-if="siteId" :key="siteId" :site-id="siteId" />
-      <SettingsPanel :modules="MODULES" :hidden="hidden" @toggle="toggleModule" />
+      <SettingsPanel :modules="MODULES" :hidden="hidden" :density="density" @toggle="toggleModule" @density="setDensity" />
       <button class="text-sm text-[var(--ink-3)] hover:text-[var(--ink)]" @click="logout">Sign out</button>
     </header>
 
-    <main v-if="stats" class="space-y-5">
+    <main v-if="stats" class="space-y-5" :class="{ compact: density === 'compact' }">
+      <StatStrip :stats="stats" :metric="metric" :live="live" :vitals="vitals" @update:metric="metric = $event" />
+
       <section class="card p-5">
-        <div class="flex items-baseline gap-6 mb-2">
-          <button
-            v-for="m in ['visitors', 'pageviews'] as const"
-            :key="m"
-            class="text-left"
-            :class="metric === m ? '' : 'opacity-45'"
-            @click="metric = m"
-          >
-            <div class="text-sm text-[var(--ink-2)] capitalize">{{ m }}</div>
-            <div class="text-3xl font-semibold tabular-nums tracking-tight">
-              {{ stats.totals[m].toLocaleString() }}
-            </div>
-          </button>
-          <span
-            v-if="delta !== null"
-            class="text-sm tabular-nums"
-            :style="{ color: delta >= 0 ? 'var(--up)' : 'var(--down)' }"
-          >
-            {{ delta >= 0 ? '↑' : '↓' }} {{ Math.abs(delta) }}% vs previous {{ rangeDays }}d
-          </span>
+        <div class="flex items-baseline gap-3 mb-2">
+          <span class="text-sm text-[var(--ink-2)] capitalize">{{ metric }}</span>
+          <span v-if="delta !== null" class="text-xs tabular-nums text-[var(--ink-3)]">vs previous {{ rangeDays }}d</span>
           <button class="ml-auto self-start text-sm text-[var(--ink-3)] hover:text-[var(--accent)]" @click="noting = !noting">
             {{ noting ? 'Cancel' : '＋ Note' }}
           </button>
@@ -286,13 +307,29 @@ async function logout() {
         <FunnelsCard v-if="show('funnels')" :site-id="siteId" :funnels="funnels" @changed="load" />
       </div>
 
-      <BreakdownPanel
-        v-if="PANELS.some((p) => show(p.key))"
-        :breakdowns="breakdowns"
-        :visible="PANELS.filter((p) => show(p.key)).map((p) => p.key)"
-        :selected="filter"
-        @select="setFilter"
-      />
+      <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        <div
+          v-for="p in orderedPanels"
+          :key="p.key"
+          draggable="true"
+          class="rounded-[14px] transition-opacity"
+          :class="{ 'opacity-40': dragKey === p.key, 'ring-2 ring-[var(--accent)]': overKey === p.key && dragKey && dragKey !== p.key }"
+          @dragstart="dragKey = p.key"
+          @dragend=";(dragKey = null), (overKey = null)"
+          @dragover.prevent="overKey = p.key"
+          @dragleave="overKey === p.key && (overKey = null)"
+          @drop.prevent="dropOn(p.key)"
+        >
+          <BreakdownCard
+            :title="p.title"
+            :rows="breakdowns[p.key] ?? []"
+            :dim="p.key"
+            clickable
+            :selected="filter?.dim === p.key ? filter.value : null"
+            @select="(v) => setFilter(p.key, v)"
+          />
+        </div>
+      </div>
     </main>
 
     <p v-else-if="loading" class="text-[var(--ink-3)]">Loading…</p>

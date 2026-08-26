@@ -6,8 +6,8 @@ export interface ModuleDef {
   label: string
 }
 
-const props = defineProps<{ modules: ModuleDef[]; hidden: string[] }>()
-const emit = defineEmits<{ toggle: [key: string] }>()
+const props = defineProps<{ modules: ModuleDef[]; hidden: string[]; density: 'comfy' | 'compact' }>()
+const emit = defineEmits<{ toggle: [key: string]; density: [d: 'comfy' | 'compact'] }>()
 
 const open = ref(false)
 const root = ref<HTMLElement>()
@@ -44,6 +44,19 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
         />
         {{ m.label }}
       </label>
+
+      <div class="mt-3 mb-2 text-xs font-medium text-[var(--ink-3)]">Density</div>
+      <div class="flex gap-1 rounded-lg bg-[var(--bg)] p-1">
+        <button
+          v-for="d in (['comfy', 'compact'] as const)"
+          :key="d"
+          class="flex-1 rounded-md px-2 py-1 text-xs capitalize"
+          :class="props.density === d ? 'bg-[var(--accent-soft)] font-medium text-[var(--accent)]' : 'text-[var(--ink-2)]'"
+          @click="emit('density', d)"
+        >
+          {{ d === 'comfy' ? 'Comfortable' : 'Compact' }}
+        </button>
+      </div>
     </div>
   </div>
 </template>

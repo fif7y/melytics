@@ -153,7 +153,7 @@ watch(rangeDays, load)
         </section>
 
         <div class="grid gap-5 sm:grid-cols-2">
-          <BreakdownCard v-for="p in PANELS" :key="p.key" :title="p.title" :rows="breakdowns[p.key] ?? []" />
+          <BreakdownCard v-for="p in PANELS" :key="p.key" :title="p.title" :rows="breakdowns[p.key] ?? []" :dim="p.key" />
         </div>
 
         <p class="text-xs text-[var(--ink-3)] text-center pt-4">measured by melytics</p>
