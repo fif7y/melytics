@@ -66,19 +66,19 @@ const tiles = computed(() => {
     const mmss = (secs: number) => `${Math.floor(secs / 60)}:${String(Math.round(secs % 60)).padStart(2, '0')}`
     out.push(
       {
+        key: 'duration',
+        label: 'Avg. visit',
+        value: s.totals.avg_duration != null ? mmss(s.totals.avg_duration) : '—',
+        delta: delta(s.totals.avg_duration ?? 0, s.previous_totals.avg_duration ?? 0),
+        spark: s.series.map((p) => (p.sessions ? (p.duration_sum ?? 0) / p.sessions : 0)),
+      },
+      {
         key: 'bounce',
         label: 'Bounce rate',
         value: s.totals.bounce_rate != null ? `${s.totals.bounce_rate}%` : '—',
         delta: delta(s.totals.bounce_rate ?? 0, s.previous_totals.bounce_rate ?? 0),
         invert: true, // a falling bounce rate is the good direction
         spark: s.series.map((p) => (p.sessions ? (p.bounces ?? 0) / p.sessions : 0)),
-      },
-      {
-        key: 'duration',
-        label: 'Avg. visit',
-        value: s.totals.avg_duration != null ? mmss(s.totals.avg_duration) : '—',
-        delta: delta(s.totals.avg_duration ?? 0, s.previous_totals.avg_duration ?? 0),
-        spark: s.series.map((p) => (p.sessions ? (p.duration_sum ?? 0) / p.sessions : 0)),
       }
     )
   }
