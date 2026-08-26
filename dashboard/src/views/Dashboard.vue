@@ -61,6 +61,52 @@ const RANGES = [
   { label: '30d', days: 30 },
   { label: '90d', days: 90 },
 ]
+
+// Custom date range: when set, it wins over the preset days
+const CUSTOM_KEY = 'melytics_custom_range'
+const customRange = ref<{ from: string; to: string } | null>(
+  (() => {
+    try {
+      const v = JSON.parse(localStorage.getItem(CUSTOM_KEY) ?? 'null')
+      return v?.from && v?.to ? v : null
+    } catch {
+      return null
+    }
+  })()
+)
+const pickingRange = ref(false)
+const pickFrom = ref('')
+const pickTo = ref('')
+const todayIso = () => {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+function openRangePicker() {
+  pickFrom.value = customRange.value?.from ?? todayIso()
+  pickTo.value = customRange.value?.to ?? todayIso()
+  pickingRange.value = true
+}
+function applyCustomRange() {
+  if (!pickFrom.value || !pickTo.value) return
+  const [from, to] = pickFrom.value <= pickTo.value ? [pickFrom.value, pickTo.value] : [pickTo.value, pickFrom.value]
+  customRange.value = { from, to }
+  try {
+    localStorage.setItem(CUSTOM_KEY, JSON.stringify(customRange.value))
+  } catch {}
+  pickingRange.value = false
+}
+function setPresetRange(days: number) {
+  customRange.value = null
+  try {
+    localStorage.removeItem(CUSTOM_KEY)
+  } catch {}
+  rangeDays.value = days
+}
+const customLabel = computed(() => {
+  if (!customRange.value) return 'Custom'
+  const f = (s: string) => new Date(s + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+  return `${f(customRange.value.from)} – ${f(customRange.value.to)}`
+})
 // inert panels are observation-only: their dimensions can't cross-filter
 const PANELS: { key: string; title: string; inert?: boolean }[] = [
   { key: 'page', title: 'Pages' },
@@ -220,6 +266,7 @@ const delta = computed(() => {
 })
 
 function rangeParams() {
+  if (customRange.value) return `from=${customRange.value.from}&to=${customRange.value.to}`
   const to = new Date()
   const from = new Date(Date.now() - (rangeDays.value - 1) * 86400_000)
   // local calendar date, not toISOString (which is UTC and flips the day in the evening)
@@ -350,7 +397,7 @@ async function deleteSite() {
 }
 onBeforeUnmount(() => clearInterval(liveTimer))
 
-watch([siteId, rangeDays, filter], load)
+watch([siteId, rangeDays, filter, customRange], load)
 
 async function addNote() {
   if (!noteText.value || !siteId.value) return
@@ -421,10 +468,17 @@ async function logout() {
             v-for="r in RANGES"
             :key="r.days"
             class="rounded-md px-3 py-1 text-sm"
-            :class="rangeDays === r.days ? 'bg-[var(--accent-soft)] text-[var(--accent)] font-medium' : 'text-[var(--ink-2)]'"
-            @click="rangeDays = r.days"
+            :class="!customRange && rangeDays === r.days ? 'bg-[var(--accent-soft)] text-[var(--accent)] font-medium' : 'text-[var(--ink-2)]'"
+            @click="setPresetRange(r.days)"
           >
             {{ r.label }}
+          </button>
+          <button
+            class="rounded-md px-3 py-1 text-sm tabular-nums"
+            :class="customRange ? 'bg-[var(--accent-soft)] text-[var(--accent)] font-medium' : 'text-[var(--ink-2)]'"
+            @click="openRangePicker"
+          >
+            {{ customLabel }}
           </button>
         </div>
 
@@ -478,6 +532,36 @@ async function logout() {
 
     <SetupWizard v-if="siteId" ref="wizard" :site-id="siteId" :has-goals="goals.length > 0" :targets="targets" @created="load" />
 
+    <Teleport to="body">
+      <div v-if="pickingRange" class="fixed inset-0 z-50 grid place-items-center bg-black/25 p-6" @click.self="pickingRange = false" @keydown.esc="pickingRange = false">
+        <form class="w-full max-w-xs rounded-[14px] bg-[var(--surface)] p-5 shadow-2xl" @submit.prevent="applyCustomRange">
+          <h2 class="mb-4 text-sm font-semibold">Custom range</h2>
+          <label class="mb-1 block text-xs text-[var(--ink-3)]" for="range-from">From</label>
+          <input
+            id="range-from"
+            v-model="pickFrom"
+            type="date"
+            required
+            :max="todayIso()"
+            class="mb-3 w-full rounded-lg bg-[var(--bg)] px-3 py-2 text-sm outline-none focus:ring-2 ring-[var(--accent)]"
+          />
+          <label class="mb-1 block text-xs text-[var(--ink-3)]" for="range-to">To</label>
+          <input
+            id="range-to"
+            v-model="pickTo"
+            type="date"
+            required
+            :max="todayIso()"
+            class="mb-5 w-full rounded-lg bg-[var(--bg)] px-3 py-2 text-sm outline-none focus:ring-2 ring-[var(--accent)]"
+          />
+          <div class="flex gap-2">
+            <button class="flex-1 rounded-lg bg-[var(--accent)] py-2 text-sm font-medium text-white">Apply</button>
+            <button type="button" class="rounded-lg px-4 py-2 text-sm text-[var(--ink-3)]" @click="pickingRange = false">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </Teleport>
+
     <div
       v-if="me && !me.verified"
       class="mb-6 flex flex-wrap items-center gap-3 rounded-[14px] bg-[var(--accent-soft)] px-4 py-3 text-sm"
@@ -504,7 +588,7 @@ async function logout() {
       <section class="card p-5">
         <div class="flex items-baseline gap-3 mb-2">
           <span class="text-sm text-[var(--ink-2)] capitalize">{{ metric }}</span>
-          <span v-if="delta !== null" class="text-xs tabular-nums text-[var(--ink-3)]">vs {{ rangeDays === 1 ? 'yesterday' : `previous ${rangeDays}d` }}</span>
+          <span v-if="delta !== null" class="text-xs tabular-nums text-[var(--ink-3)]">vs {{ customRange ? 'previous period' : rangeDays === 1 ? 'yesterday' : `previous ${rangeDays}d` }}</span>
           <div class="relative ml-auto self-start">
             <button
               class="flex h-6 w-6 items-center justify-center rounded-md text-[var(--ink-3)] hover:bg-[var(--bg)] hover:text-[var(--ink)]"
