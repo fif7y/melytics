@@ -30,7 +30,18 @@ const breakdowns = ref<Record<string, BreakdownRow[]>>({})
 const live = ref<number | null>(null)
 const livePages = ref<BreakdownRow[]>([])
 const metric = ref<'visitors' | 'pageviews'>('visitors')
-const rangeDays = ref(30)
+const RANGE_KEY = 'melytics_range'
+const rangeDays = ref(
+  (() => {
+    const n = Number(localStorage.getItem(RANGE_KEY))
+    return [1, 7, 30, 90].includes(n) ? n : 30
+  })()
+)
+watch(rangeDays, (d) => {
+  try {
+    localStorage.setItem(RANGE_KEY, String(d))
+  } catch {}
+})
 const filter = ref<{ dim: string; value: string } | null>(null)
 const loading = ref(true)
 
