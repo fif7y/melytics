@@ -4,12 +4,15 @@ import { useRoute, useRouter } from 'vue-router'
 import { api, setToken, type BreakdownRow, type Site, type Stats } from '../lib/api'
 import TimeChart from '../components/TimeChart.vue'
 import BreakdownCard from '../components/BreakdownCard.vue'
+import GoalsCard, { type GoalRow } from '../components/GoalsCard.vue'
+import SharePanel from '../components/SharePanel.vue'
 
 const route = useRoute()
 const router = useRouter()
 
 const sites = ref<Site[]>([])
 const stats = ref<Stats | null>(null)
+const goals = ref<GoalRow[]>([])
 const breakdowns = ref<Record<string, BreakdownRow[]>>({})
 const live = ref<number | null>(null)
 const metric = ref<'visitors' | 'pageviews'>('visitors')
@@ -28,6 +31,7 @@ const PANELS = [
   { key: 'device', title: 'Devices' },
   { key: 'browser', title: 'Browsers' },
   { key: 'utm_campaign', title: 'Campaigns' },
+  { key: 'event', title: 'Events' },
 ]
 
 const siteId = computed(() => Number(route.params.siteId) || sites.value[0]?.id)
@@ -52,13 +56,15 @@ async function load() {
   if (!siteId.value) return
   loading.value = true
   const id = siteId.value
-  const [s, ...panels] = await Promise.all([
+  const [s, g, ...panels] = await Promise.all([
     api<Stats>(`/sites/${id}/stats?${rangeParams()}`),
+    api<{ goals: GoalRow[] }>(`/sites/${id}/goals?${rangeParams()}`),
     ...PANELS.map((p) =>
       api<{ rows: BreakdownRow[] }>(`/sites/${id}/breakdown?dimension=${p.key}&${rangeParams()}&limit=8`)
     ),
   ])
-  stats.value = s
+  stats.value = s as Stats
+  goals.value = (g as { goals: GoalRow[] }).goals
   breakdowns.value = Object.fromEntries(PANELS.map((p, i) => [p.key, panels[i].rows]))
   loading.value = false
 }
@@ -123,6 +129,7 @@ async function logout() {
         </button>
       </div>
 
+      <SharePanel v-if="siteId" :key="siteId" :site-id="siteId" />
       <button class="text-sm text-[var(--ink-3)] hover:text-[var(--ink)]" @click="logout">Sign out</button>
     </header>
 
@@ -151,6 +158,8 @@ async function logout() {
         </div>
         <TimeChart :series="stats.series" :previous="stats.previous_series" :metric="metric" />
       </section>
+
+      <GoalsCard :site-id="siteId" :goals="goals" @changed="load" />
 
       <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
         <BreakdownCard

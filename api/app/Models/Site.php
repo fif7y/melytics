@@ -34,4 +34,9 @@ class Site extends Model
     {
         return $this->hasMany(Goal::class);
     }
+
+    public function shareLink(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(ShareLink::class);
+    }
 }
