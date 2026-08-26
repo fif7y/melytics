@@ -34,6 +34,7 @@ const filter = ref<{ dim: string; value: string } | null>(null)
 const loading = ref(true)
 
 const RANGES = [
+  { label: 'Today', days: 1 },
   { label: '7d', days: 7 },
   { label: '30d', days: 30 },
   { label: '90d', days: 90 },
@@ -303,7 +304,7 @@ async function logout() {
       <section class="card p-5">
         <div class="flex items-baseline gap-3 mb-2">
           <span class="text-sm text-[var(--ink-2)] capitalize">{{ metric }}</span>
-          <span v-if="delta !== null" class="text-xs tabular-nums text-[var(--ink-3)]">vs previous {{ rangeDays }}d</span>
+          <span v-if="delta !== null" class="text-xs tabular-nums text-[var(--ink-3)]">vs {{ rangeDays === 1 ? 'yesterday' : `previous ${rangeDays}d` }}</span>
           <button class="ml-auto self-start text-sm text-[var(--ink-3)] hover:text-[var(--accent)]" @click="noting = !noting">
             {{ noting ? 'Cancel' : '＋ Note' }}
           </button>

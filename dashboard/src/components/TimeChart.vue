@@ -23,7 +23,9 @@ function build() {
   if (!el.value) return
   chart?.destroy()
 
-  const xs = props.series.map((p) => new Date(p.t).getTime() / 1000)
+  // hourly points carry a time component ("YYYY-MM-DD HH:00:00")
+  const hourly = (props.series[0]?.t.length ?? 0) > 10
+  const xs = props.series.map((p) => new Date(p.t.replace(' ', 'T')).getTime() / 1000)
   const ys = props.series.map((p) => p[props.metric])
   // previous period aligned onto the current x axis (comparison overlay)
   const prev = props.series.map((_, i) => props.previous[i]?.[props.metric] ?? null)
@@ -84,6 +86,11 @@ function build() {
             ctx.strokeStyle = ink3
             ctx.fillStyle = ink3
             ctx.setLineDash([3, 4])
+            // annotations are day-granular — skip markers on hourly charts
+            if (hourly) {
+              ctx.restore()
+              return
+            }
             days.forEach((day, i) => {
               if (!notes.has(day)) return
               const x = u.valToPos(xs[i], 'x', true)
@@ -110,7 +117,7 @@ function build() {
             const cur = ys[i] ?? 0
             const pre = prev[i]
             tip.value.innerHTML =
-              `<span style="color:var(--ink-3)">${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span> ` +
+              `<span style="color:var(--ink-3)">${hourly ? d.toLocaleTimeString(undefined, { hour: 'numeric' }) : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span> ` +
               `<b>${cur.toLocaleString()}</b>` +
               (pre != null ? ` <span style="color:var(--ink-3)">vs ${pre.toLocaleString()}</span>` : '') +
               (notes.has(days[i]) ? `<br><span style="color:var(--ink-2)">📌 ${notes.get(days[i])}</span>` : '')
