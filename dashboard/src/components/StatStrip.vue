@@ -6,19 +6,45 @@ const props = defineProps<{
   stats: Stats
   metric: 'visitors' | 'pageviews'
   live: number | null
+  lineStyle?: 'linear' | 'smooth' | 'step' | 'bars' | 'glow'
 }>()
 const emit = defineEmits<{ 'update:metric': [m: 'visitors' | 'pageviews'] }>()
 
+// Sparkline geometry follows the chart's line style so the dashboard rounds together
 function sparkPath(values: number[], w = 120, h = 28) {
-  if (values.length < 2) return { line: '', area: '', end: null as { x: number; y: number } | null }
+  const style = props.lineStyle ?? 'smooth'
+  const none = { line: '', area: '', end: null as { x: number; y: number } | null, bars: [] as { x: number; y: number; w: number; h: number }[] }
+  if (values.length < 2) return none
   const max = Math.max(...values)
   const min = Math.min(...values)
   const x = (i: number) => (i / (values.length - 1)) * w
   const y = (v: number) => h - 2.5 - ((v - min) / (max - min || 1)) * (h - 6)
-  const pts = values.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`)
+  const p = values.map((v, i) => [x(i), y(v)] as [number, number])
+
+  if (style === 'bars') {
+    const bw = (w / values.length) * 0.62
+    return { ...none, bars: values.map((v, i) => ({ x: x(i) - bw / 2, y: y(v), w: bw, h: h - y(v) })) }
+  }
+
+  let line: string
+  if (style === 'linear') {
+    line = p.map(([px, py], i) => `${i ? 'L' : 'M'}${px.toFixed(1)},${py.toFixed(1)}`).join('')
+  } else if (style === 'step') {
+    line = `M${p[0][0].toFixed(1)},${p[0][1].toFixed(1)}` + p.slice(1).map(([px, py]) => `H${px.toFixed(1)}V${py.toFixed(1)}`).join('')
+  } else {
+    // Catmull-Rom spline, same curve as the big chart
+    line = `M${p[0][0].toFixed(1)},${p[0][1].toFixed(1)}`
+    for (let i = 0; i < p.length - 1; i++) {
+      const p0 = p[Math.max(i - 1, 0)], p1 = p[i], p2 = p[i + 1], p3 = p[Math.min(i + 2, p.length - 1)]
+      const c1 = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6]
+      const c2 = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6]
+      line += `C${c1[0].toFixed(1)},${c1[1].toFixed(1)} ${c2[0].toFixed(1)},${c2[1].toFixed(1)} ${p2[0].toFixed(1)},${p2[1].toFixed(1)}`
+    }
+  }
   return {
-    line: pts.join(' '),
-    area: `0,${h} ${pts.join(' ')} ${w},${h}`,
+    ...none,
+    line,
+    area: `${line}L${w},${h}L0,${h}Z`,
     end: { x: x(values.length - 1), y: y(values[values.length - 1]) },
   }
 }
@@ -159,9 +185,14 @@ function dropOn(target: string) {
         </span>
       </div>
       <svg v-if="t.spark && t.spark.length > 1" viewBox="0 0 120 28" preserveAspectRatio="none" class="mt-1 block h-7 w-full" aria-hidden="true">
-        <polygon :points="sparkPath(t.spark).area" fill="var(--accent-soft)" />
-        <polyline :points="sparkPath(t.spark).line" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" vector-effect="non-scaling-stroke" />
-        <circle v-if="sparkPath(t.spark).end" :cx="sparkPath(t.spark).end!.x" :cy="sparkPath(t.spark).end!.y" r="2.2" fill="var(--accent)" />
+        <template v-if="sparkPath(t.spark).bars.length">
+          <rect v-for="(b, bi) in sparkPath(t.spark).bars" :key="bi" :x="b.x" :y="b.y" :width="b.w" :height="b.h" rx="1" fill="var(--accent)" opacity="0.85" />
+        </template>
+        <template v-else>
+          <path :d="sparkPath(t.spark).area" fill="var(--accent-soft)" />
+          <path :d="sparkPath(t.spark).line" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" vector-effect="non-scaling-stroke" />
+          <circle v-if="sparkPath(t.spark).end" :cx="sparkPath(t.spark).end!.x" :cy="sparkPath(t.spark).end!.y" r="2.2" fill="var(--accent)" />
+        </template>
       </svg>
     </component>
   </div>

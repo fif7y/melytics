@@ -165,6 +165,31 @@ function dropOn(target: string) {
   if (dragKey.value) moveKey(dragKey.value, target)
 }
 
+// Chart mark style, shared by the big chart and the stat-strip sparklines
+const CHART_STYLES = [
+  { key: 'smooth', label: 'Smooth' },
+  { key: 'linear', label: 'Linear' },
+  { key: 'step', label: 'Step' },
+  { key: 'bars', label: 'Bars' },
+  { key: 'glow', label: 'Glow' },
+] as const
+type ChartStyle = (typeof CHART_STYLES)[number]['key']
+const CHART_STYLE_KEY = 'melytics_chart_style'
+const chartStyle = ref<ChartStyle>(
+  (() => {
+    const v = localStorage.getItem(CHART_STYLE_KEY)
+    return CHART_STYLES.some((s) => s.key === v) ? (v as ChartStyle) : 'smooth'
+  })()
+)
+const chartStyleMenu = ref(false)
+function setChartStyle(k: ChartStyle) {
+  chartStyle.value = k
+  chartStyleMenu.value = false
+  try {
+    localStorage.setItem(CHART_STYLE_KEY, k)
+  } catch {}
+}
+
 // Density: compact tightens card padding and row spacing
 const DENSITY_KEY = 'melytics_density'
 const density = ref<'comfy' | 'compact'>(localStorage.getItem(DENSITY_KEY) === 'compact' ? 'compact' : 'comfy')
@@ -475,13 +500,36 @@ async function logout() {
     </main>
 
     <main v-else-if="stats" class="space-y-5" :class="{ compact: density === 'compact' }">
-      <StatStrip :stats="stats" :metric="metric" :live="live" @update:metric="metric = $event" />
+      <StatStrip :stats="stats" :metric="metric" :live="live" :line-style="chartStyle" @update:metric="metric = $event" />
 
       <section class="card p-5">
         <div class="flex items-baseline gap-3 mb-2">
           <span class="text-sm text-[var(--ink-2)] capitalize">{{ metric }}</span>
           <span v-if="delta !== null" class="text-xs tabular-nums text-[var(--ink-3)]">vs {{ rangeDays === 1 ? 'yesterday' : `previous ${rangeDays}d` }}</span>
-          <button class="ml-auto self-start text-sm text-[var(--ink-3)] hover:text-[var(--accent)]" @click="noting = !noting">
+          <div class="relative ml-auto self-start">
+            <button
+              class="flex h-6 w-6 items-center justify-center rounded-md text-[var(--ink-3)] hover:bg-[var(--bg)] hover:text-[var(--ink)]"
+              title="Chart style"
+              aria-label="Choose chart style"
+              @click="chartStyleMenu = !chartStyleMenu"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+                <path d="M4 6h16M4 12h10M4 18h5" />
+              </svg>
+            </button>
+            <div v-if="chartStyleMenu" class="absolute right-0 top-full z-20 mt-1 w-32 rounded-xl bg-[var(--surface)] py-1 shadow-xl">
+              <button
+                v-for="s in CHART_STYLES"
+                :key="s.key"
+                class="flex w-full items-center px-3 py-1.5 text-left text-sm hover:bg-[var(--bg)]"
+                :class="chartStyle === s.key ? 'text-[var(--accent)] font-medium' : ''"
+                @click="setChartStyle(s.key)"
+              >
+                {{ s.label }}
+              </button>
+            </div>
+          </div>
+          <button class="self-start text-sm text-[var(--ink-3)] hover:text-[var(--accent)]" @click="noting = !noting">
             {{ noting ? 'Cancel' : '＋ Note' }}
           </button>
         </div>
@@ -500,7 +548,7 @@ async function logout() {
           <button class="rounded-lg px-3 py-1.5 text-sm text-white bg-[var(--accent)]">Save</button>
         </form>
 
-        <TimeChart :key="theme" :series="stats.series" :previous="stats.previous_series" :metric="metric" :annotations="annotations" />
+        <TimeChart :key="theme" :series="stats.series" :previous="stats.previous_series" :metric="metric" :annotations="annotations" :line-style="chartStyle" />
 
         <div v-if="annotations.length" class="mt-2 flex flex-wrap gap-1.5">
           <span

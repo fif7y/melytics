@@ -4,11 +4,14 @@ import uPlot from 'uplot'
 import 'uplot/dist/uPlot.min.css'
 import type { Annotation, SeriesPoint } from '../lib/api'
 
+export type LineStyle = 'linear' | 'smooth' | 'step' | 'bars' | 'glow'
+
 const props = defineProps<{
   series: SeriesPoint[]
   previous: SeriesPoint[]
   metric: 'visitors' | 'pageviews'
   annotations?: Annotation[]
+  lineStyle?: LineStyle
 }>()
 
 const el = ref<HTMLDivElement>()
@@ -36,6 +39,26 @@ function build() {
   const accent = cssVar('--accent')
   const compare = cssVar('--compare')
   const ink3 = cssVar('--ink-3')
+
+  // Mark style: uPlot path builders per user choice (smooth is the default)
+  const style = props.lineStyle ?? 'smooth'
+  const p = (uPlot as any).paths ?? {}
+  const builder =
+    style === 'smooth' || style === 'glow'
+      ? p.spline?.()
+      : style === 'step'
+        ? p.stepped?.({ align: 1 })
+        : style === 'bars'
+          ? p.bars?.({ size: [0.62, 100] })
+          : undefined
+  const prevBuilder = style === 'step' ? p.stepped?.({ align: 1 }) : style === 'linear' ? undefined : p.spline?.()
+  // Glow: the area carries the weight — canvas gradient fading to nothing
+  const glowFill = (u: uPlot) => {
+    const g = u.ctx.createLinearGradient(0, u.bbox.top, 0, u.bbox.top + u.bbox.height)
+    g.addColorStop(0, accent + '59')
+    g.addColorStop(1, accent + '00')
+    return g
+  }
 
   // day (YYYY-MM-DD) -> joined annotation text, for markers + tooltip
   const notes = new Map<string, string>()
@@ -69,16 +92,18 @@ function build() {
         {
           label: 'previous',
           stroke: compare,
-          width: 2,
+          width: style === 'glow' ? 1.5 : 2,
           dash: [4, 5],
           points: { show: false },
+          ...(prevBuilder ? { paths: prevBuilder } : {}),
         },
         {
           label: 'current',
-          stroke: accent,
-          width: 2,
-          fill: cssVar('--accent-soft'),
+          stroke: style === 'bars' ? undefined : accent,
+          width: style === 'glow' ? 1.5 : style === 'bars' ? 0 : 2,
+          fill: style === 'glow' ? glowFill : style === 'bars' ? accent + 'd9' : cssVar('--accent-soft'),
           points: { show: false },
+          ...(builder ? { paths: builder } : {}),
         },
       ],
       hooks: {
@@ -86,6 +111,16 @@ function build() {
           (u) => {
             const { ctx } = u
             ctx.save()
+            // Glow: endpoint dot marks "now"
+            if (style === 'glow' && ys.length) {
+              const li = ys.length - 1
+              if (ys[li] != null) {
+                ctx.fillStyle = accent
+                ctx.beginPath()
+                ctx.arc(u.valToPos(xs[li], 'x', true), u.valToPos(ys[li]!, 'y', true), 3.5, 0, Math.PI * 2)
+                ctx.fill()
+              }
+            }
             ctx.strokeStyle = ink3
             ctx.fillStyle = ink3
             ctx.setLineDash([3, 4])
@@ -146,7 +181,7 @@ onMounted(() => {
   })
 })
 
-watch(() => [props.series, props.metric, props.annotations], build, { deep: true })
+watch(() => [props.series, props.metric, props.annotations, props.lineStyle], build, { deep: true })
 </script>
 
 <template>
