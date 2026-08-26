@@ -7,6 +7,7 @@ const props = defineProps<{
   modelValue: string
   targets?: { pages: string[]; events: string[] }
   placeholder?: string
+  inputClass?: string
 }>()
 const emit = defineEmits<{ 'update:modelValue': [v: string]; picked: [] }>()
 
@@ -19,8 +20,13 @@ const options = computed(() => {
     ...(props.targets?.pages ?? []).map((v) => ({ value: v, kind: 'page' as const })),
   ]
   const q = props.modelValue.trim().toLowerCase()
-  return q ? all.filter((o) => o.value.toLowerCase().includes(q)) : all
+  const filtered = q ? all.filter((o) => o.value.toLowerCase().includes(q)) : all
+  // A prefilled pattern that matches nothing shouldn't hide the list — offer everything
+  return filtered.length ? filtered : all
 })
+
+// Chips only earn their place when both kinds are present
+const mixed = computed(() => (props.targets?.pages.length ?? 0) > 0 && (props.targets?.events.length ?? 0) > 0)
 
 function pick(v: string) {
   emit('update:modelValue', v)
@@ -50,7 +56,7 @@ function onKey(e: KeyboardEvent) {
     <input
       :value="modelValue"
       :placeholder="placeholder"
-      class="w-full rounded-lg px-3 py-1.5 text-sm bg-[var(--bg)] outline-none focus:ring-2 ring-[var(--accent)] placeholder:text-[var(--ink-3)]"
+      :class="inputClass ?? 'w-full rounded-lg px-3 py-1.5 text-sm bg-[var(--bg)] outline-none focus:ring-2 ring-[var(--accent)] placeholder:text-[var(--ink-3)]'"
       @input="emit('update:modelValue', ($event.target as HTMLInputElement).value), (open = true), (hi = -1)"
       @focus="open = true"
       @blur="open = false"
@@ -70,7 +76,7 @@ function onKey(e: KeyboardEvent) {
         @mouseenter="hi = i"
       >
         <span class="truncate">{{ o.value }}</span>
-        <span class="ml-auto shrink-0 rounded-full bg-[var(--bg)] px-2 py-0.5 text-[10px] text-[var(--ink-3)]">{{ o.kind }}</span>
+        <span v-if="mixed" class="ml-auto shrink-0 rounded-full bg-[var(--bg)] px-2 py-0.5 text-[10px] text-[var(--ink-3)]">{{ o.kind }}</span>
       </button>
     </div>
   </div>

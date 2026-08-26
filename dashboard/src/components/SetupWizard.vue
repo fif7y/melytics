@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { api } from '../lib/api'
+import TargetPicker from './TargetPicker.vue'
 
 const props = defineProps<{ siteId: number; hasGoals?: boolean; targets?: { pages: string[]; events: string[] } }>()
 const emit = defineEmits<{ close: []; created: [] }>()
@@ -112,9 +113,6 @@ const STEPS = ['Welcome', 'Goals', 'Funnel', 'Create']
   <Teleport to="body">
     <Transition name="wiz">
       <div v-if="open" class="fixed inset-0 z-50 overflow-y-auto bg-[var(--bg)]" role="dialog" aria-label="Setup assistant" @keydown.esc="close">
-        <datalist id="wiz-pages">
-          <option v-for="p in props.targets?.pages ?? []" :key="p" :value="p" />
-        </datalist>
         <!-- top rail: quiet progress, one exit -->
         <div class="sticky top-0 z-10 flex items-center gap-4 bg-[var(--bg)] px-6 py-4">
           <span class="text-sm font-semibold tracking-tight">melytics</span>
@@ -185,13 +183,16 @@ const STEPS = ['Welcome', 'Goals', 'Funnel', 'Create']
             </p>
 
             <div class="mt-8 grid gap-3 sm:grid-cols-2">
-              <button
+              <div
                 v-for="(t, i) in GOAL_TEMPLATES"
                 :key="t.id"
-                class="wiz-rise rounded-[14px] p-4 text-left transition-all duration-200"
+                role="button"
+                tabindex="0"
+                class="wiz-rise cursor-pointer rounded-[14px] p-4 text-left transition-all duration-200"
                 :class="picked[t.id] ? 'bg-[var(--accent-soft)] ring-2 ring-[var(--accent)] shadow-sm' : 'bg-[var(--surface)] hover:shadow-sm'"
                 :style="{ '--d': 2 + i * 0.5 }"
                 @click="picked[t.id] = !picked[t.id]"
+                @keydown.enter.self="picked[t.id] = !picked[t.id]"
               >
                 <div class="flex items-center gap-2">
                   <span class="text-sm font-medium">{{ t.name }}</span>
@@ -202,9 +203,15 @@ const STEPS = ['Welcome', 'Goals', 'Funnel', 'Create']
                 </div>
                 <p class="mt-1 text-xs leading-relaxed text-[var(--ink-3)]">{{ t.desc }}</p>
                 <div v-if="picked[t.id]" class="mt-2.5" @click.stop>
-                  <input
+                  <TargetPicker
+                    v-if="!t.event"
                     v-model="patterns[t.id]"
-                    :list="t.event ? undefined : 'wiz-pages'"
+                    :targets="{ pages: props.targets?.pages ?? [], events: [] }"
+                    input-class="w-full rounded-lg bg-[var(--bg)] px-2.5 py-1.5 font-mono text-xs outline-none focus:ring-2 ring-[var(--accent)]"
+                  />
+                  <input
+                    v-else
+                    v-model="patterns[t.id]"
                     class="w-full rounded-lg bg-[var(--bg)] px-2.5 py-1.5 font-mono text-xs outline-none focus:ring-2 ring-[var(--accent)]"
                     :aria-label="`Target for ${t.name}`"
                   />
@@ -215,7 +222,7 @@ const STEPS = ['Welcome', 'Goals', 'Funnel', 'Create']
                 <div v-else class="mt-2.5 inline-block rounded-md bg-[var(--bg)] px-2 py-1 font-mono text-[11px] text-[var(--ink-2)]">
                   {{ t.event ?? t.path }}
                 </div>
-              </button>
+              </div>
             </div>
 
             <div class="mt-10 flex items-center gap-3">
@@ -265,11 +272,10 @@ const STEPS = ['Welcome', 'Goals', 'Funnel', 'Create']
               />
               <div v-for="(_, i) in funnelSteps" :key="i" class="mb-2 flex items-center gap-3">
                 <span class="w-5 text-right text-xs tabular-nums text-[var(--ink-3)]">{{ i + 1 }}</span>
-                <input
+                <TargetPicker
                   v-model="funnelSteps[i]"
-                  list="wiz-pages"
-                  class="flex-1 rounded-lg bg-[var(--bg)] px-3 py-2 font-mono text-xs outline-none focus:ring-2 ring-[var(--accent)]"
-                  :aria-label="`Step ${i + 1} path`"
+                  :targets="{ pages: props.targets?.pages ?? [], events: [] }"
+                  input-class="w-full rounded-lg bg-[var(--bg)] px-3 py-2 font-mono text-xs outline-none focus:ring-2 ring-[var(--accent)]"
                 />
                 <button v-if="funnelSteps.length > 2" class="text-[var(--ink-3)] hover:text-[var(--down)]" :aria-label="`Remove step ${i + 1}`" @click="funnelSteps.splice(i, 1)">×</button>
               </div>
@@ -354,7 +360,9 @@ melytics.track('{{ createdEvents[0] }}')</code></pre>
 <style scoped>
 /* Choreography: everything rises on an expo-out curve, staggered by --d */
 .wiz-rise {
-  animation: rise 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+  /* backwards (not both): once risen, no residual transform — a leftover
+     transform creates stacking contexts that paint dropdowns under siblings */
+  animation: rise 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards;
   animation-delay: calc(var(--d, 0) * 80ms);
 }
 @keyframes rise {
