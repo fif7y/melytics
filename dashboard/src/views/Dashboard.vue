@@ -128,6 +128,17 @@ const orderedPanels = computed(() => {
 })
 const dragKey = ref<string | null>(null)
 const overKey = ref<string | null>(null)
+
+// Settings lists modules in on-screen order: goals/funnels row first, then the grid's order
+const orderedModules = computed(() => {
+  const idx = (k: string) => {
+    if (k === 'goals') return -2
+    if (k === 'funnels') return -1
+    const i = order.value.indexOf(k)
+    return i === -1 ? 100 + GRID_ITEMS.findIndex((p) => p.key === k) : i
+  }
+  return MODULES.slice().sort((a, b) => idx(a.key) - idx(b.key))
+})
 function dropOn(target: string) {
   if (!dragKey.value || dragKey.value === target) return
   const keys = orderedPanels.value.map((p) => p.key)
@@ -379,7 +390,7 @@ async function logout() {
 
         <SharePanel v-if="siteId" :key="siteId" :site-id="siteId" />
         <SettingsPanel
-          :modules="MODULES"
+          :modules="orderedModules"
           :hidden="hidden"
           :density="density"
           :tier2="site?.tier2_enabled ?? false"
