@@ -1,8 +1,8 @@
 # melytics
 
-Privacy-first, cookieless web analytics. GoatCounter-inspired, with a modern
-dashboard, ad-blocker-resistant first-party ingestion, and a two-tier privacy
-model (consentless by default; consent-gated extras only where the law requires).
+Privacy-first, cookieless web analytics. A modern dashboard,
+ad-blocker-resistant first-party ingestion, and a two-tier privacy model —
+consentless by default, consent-gated extras only where the law requires.
 
 ![Dashboard](phase2-dashboard.png)
 
