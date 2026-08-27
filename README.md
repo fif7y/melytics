@@ -148,14 +148,14 @@ exists in the other theme — see `docs/screenshots/`.
 Grab the release zip (or build one with `bash deploy/build-release.sh`), then:
 
 1. **Give melytics a home.** A subdomain like `stats.your-domain.com` is the
-   usual choice — in your hosting panel, create the subdomain and, if it asks,
-   choose the option that creates a folder for it. That folder is where
-   everything below goes.
-2. **Upload and extract the zip there.** The zip has no wrapper folder, so
-   extracting it in place puts the files exactly where they belong (a bundled
-   `.htaccess` handles the rest — no docroot fiddling). If your file manager
-   insists on extracting into a new folder, move that folder's *contents* up
-   into the subdomain folder afterward.
+   usual choice — create it in your hosting panel and note the folder it
+   serves (e.g. `public_html/stats`). That folder is where everything goes.
+2. **Upload and extract the zip there.** The zip has no wrapper folder, so its
+   files belong directly in that folder (a bundled `.htaccess` handles the
+   rest — no docroot fiddling). If your file manager only extracts into a
+   *new* folder, use that: upload the zip one level up and extract into a
+   folder named exactly like the subdomain's — the extraction creates the
+   folder itself. Delete the zip when done.
 
    *Shortcut:* upload just the one-file `melytics-installer.php` instead and
    open it in the browser — it downloads and unpacks the release for you, no
