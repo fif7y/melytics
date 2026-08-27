@@ -310,36 +310,43 @@ class Stats
      */
     public function vitals(Site $site, Carbon $from, Carbon $to): array
     {
-        $rows = DB::table('hits')
+        $base = fn () => DB::table('hits')
             ->where('site_id', $site->id)
             ->where('event', '__vitals')
-            ->whereBetween('created_at', self::utcBounds($from, $to))
-            ->pluck('event_props');
+            ->whereBetween('created_at', self::utcBounds($from, $to));
 
-        $metrics = ['lcp' => [], 'cls' => [], 'inp' => [], 'ttfb' => []];
-        foreach ($rows as $json) {
-            $p = json_decode($json, true) ?: [];
-            foreach ($metrics as $key => $_) {
-                if (isset($p[$key]) && is_numeric($p[$key])) {
-                    $metrics[$key][] = (float) $p[$key];
-                }
-            }
-        }
+        $keys = ['lcp', 'cls', 'inp', 'ttfb'];
+        $exprs = array_combine($keys, array_map(SqlDialect::jsonNum(...), $keys));
 
-        $p75 = function (array $vals): ?float {
-            if (! $vals) {
+        // one aggregate pass for sample counts, then one ordered pick per metric —
+        // the p75 sort happens in SQL instead of loading every props blob into PHP
+        $counts = $base()->selectRaw(
+            'COUNT(*) as samples, '.implode(', ', array_map(
+                fn ($k) => "COUNT({$exprs[$k]}) as {$k}_n", $keys
+            ))
+        )->first();
+
+        $p75 = function (string $key) use ($base, $exprs, $counts): ?float {
+            $n = (int) $counts->{$key.'_n'};
+            if (! $n) {
                 return null;
             }
-            sort($vals);
-            return $vals[(int) floor(count($vals) * 0.75)] ?? end($vals);
+            $off = min((int) floor($n * 0.75), $n - 1);
+            $v = $base()->whereRaw("{$exprs[$key]} IS NOT NULL")
+                ->orderByRaw($exprs[$key])
+                ->offset($off)->limit(1)
+                ->selectRaw("{$exprs[$key]} as v")
+                ->value('v');
+
+            return $v === null ? null : (float) $v;
         };
 
         return [
-            'samples' => count($rows),
-            'lcp' => $p75($metrics['lcp']),
-            'cls' => $p75($metrics['cls']),
-            'inp' => $p75($metrics['inp']),
-            'ttfb' => $p75($metrics['ttfb']),
+            'samples' => (int) $counts->samples,
+            'lcp' => $p75('lcp'),
+            'cls' => $p75('cls'),
+            'inp' => $p75('inp'),
+            'ttfb' => $p75('ttfb'),
         ];
     }
 

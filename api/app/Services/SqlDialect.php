@@ -28,6 +28,14 @@ class SqlDialect
             : "json_extract(event_props, '$.url')";
     }
 
+    /** Numeric JSON prop from event_props as a float, NULL when absent or non-numeric. */
+    public static function jsonNum(string $field): string
+    {
+        return self::mysql()
+            ? "CASE WHEN JSON_TYPE(JSON_EXTRACT(event_props, '$.$field')) IN ('INTEGER','DOUBLE','DECIMAL','UNSIGNED INTEGER') THEN CAST(JSON_EXTRACT(event_props, '$.$field') AS DOUBLE) END"
+            : "CASE WHEN typeof(json_extract(event_props, '$.$field')) IN ('integer','real') THEN CAST(json_extract(event_props, '$.$field') AS REAL) END";
+    }
+
     /** Period expression bucketing a UTC datetime column into site-local time. */
     public static function periodExpr(string $column, string $grain, int $offsetMin): string
     {

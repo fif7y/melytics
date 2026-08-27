@@ -50,23 +50,24 @@ class Tier2Stats
     public function cohorts(Site $site, int $weeks = 8): array
     {
         $wk = SqlDialect::weekIndex('created_at', Stats::tzOffset($site->timezone));
-
-        $rows = DB::select(
-            "SELECT visitor_id, $wk AS wk FROM hits
-             WHERE site_id = ? AND visitor_id IS NOT NULL
-             GROUP BY visitor_id, wk",
-            [$site->id]
-        );
-
-        $first = [];
-        $active = [];
-        foreach ($rows as $r) {
-            $first[$r->visitor_id] = min($first[$r->visitor_id] ?? PHP_INT_MAX, (int) $r->wk);
-            $active[$r->visitor_id][] = (int) $r->wk;
-        }
-
         $nowWk = intdiv((int) Carbon::parse('2024-01-01')->diffInDays(now($site->timezone)), 7);
         $startWk = $nowWk - $weeks + 1;
+
+        // aggregated in SQL: (cohort week, offset) → active visitors; visitors whose
+        // first-seen week predates the window never reach PHP
+        $rows = DB::select(
+            "WITH vw AS (
+                SELECT visitor_id, $wk AS wk FROM hits
+                WHERE site_id = ? AND visitor_id IS NOT NULL
+                GROUP BY visitor_id, wk
+            ), fw AS (
+                SELECT visitor_id, MIN(wk) AS cw FROM vw GROUP BY visitor_id HAVING MIN(wk) >= ?
+            )
+            SELECT fw.cw AS cw, vw.wk - fw.cw AS off, COUNT(*) AS n
+            FROM vw JOIN fw ON fw.visitor_id = vw.visitor_id
+            GROUP BY fw.cw, vw.wk - fw.cw",
+            [$site->id, $startWk]
+        );
 
         $cohorts = [];
         for ($w = $startWk; $w <= $nowWk; $w++) {
@@ -76,14 +77,14 @@ class Tier2Stats
                 'active' => array_fill(0, $nowWk - $w + 1, 0),
             ];
         }
-        foreach ($first as $id => $w) {
-            if ($w < $startWk) {
+        foreach ($rows as $r) {
+            if (! isset($cohorts[$r->cw])) {
                 continue;
             }
-            $cohorts[$w]['size']++;
-            foreach (array_unique($active[$id]) as $aw) {
-                $cohorts[$w]['active'][$aw - $w]++;
+            if ((int) $r->off === 0) {
+                $cohorts[$r->cw]['size'] = (int) $r->n; // every visitor is active in their first week
             }
+            $cohorts[$r->cw]['active'][(int) $r->off] = (int) $r->n;
         }
 
         return array_values($cohorts);
@@ -145,14 +146,18 @@ class Tier2Stats
      *
      * @return array<string, string> visitor_id => first conversion time (UTC)
      */
-    private function convertingVisitors(Site $site, Carbon $from, Carbon $to): array
+    /**
+     * Consented visitors with their first-ever goal-matching hit, or null when
+     * the site has no goals. Callers filter first_conv into their range.
+     */
+    private function convertingQuery(Site $site): ?\Illuminate\Database\Query\Builder
     {
         $goals = $site->goals;
         if ($goals->isEmpty()) {
-            return [];
+            return null;
         }
 
-        $rows = DB::table('hits')
+        return DB::table('hits')
             ->where('site_id', $site->id)
             ->whereNotNull('visitor_id')
             ->where(function ($q) use ($goals) {
@@ -168,12 +173,19 @@ class Tier2Stats
                 }
             })
             ->groupBy('visitor_id')
-            ->selectRaw('visitor_id, MIN(created_at) as first_conv')
-            ->get();
+            ->selectRaw('visitor_id, MIN(created_at) as first_conv');
+    }
+
+    private function convertingVisitors(Site $site, Carbon $from, Carbon $to): array
+    {
+        $q = $this->convertingQuery($site);
+        if (! $q) {
+            return [];
+        }
 
         [$f, $t] = Stats::utcBounds($from, $to);
 
-        return $rows
+        return $q->get()
             ->filter(fn ($r) => $r->first_conv >= $f->toDateTimeString() && $r->first_conv <= $t->toDateTimeString())
             ->pluck('first_conv', 'visitor_id')
             ->all();
@@ -227,32 +239,41 @@ class Tier2Stats
             ['label' => '8–30d', 'max' => 30, 'visitors' => 0],
             ['label' => '30d+', 'max' => PHP_FLOAT_MAX, 'visitors' => 0],
         ];
-        $conv = $this->convertingVisitors($site, $from, $to);
-        if (! $conv) {
-            return ['identified' => 0, 'median_days' => 0.0, 'median_sessions' => 0.0,
-                'buckets' => array_map(fn ($b) => ['label' => $b['label'], 'visitors' => 0], $buckets)];
+        $convQ = $this->convertingQuery($site);
+        $empty = ['identified' => 0, 'median_days' => 0.0, 'median_sessions' => 0.0,
+            'buckets' => array_map(fn ($b) => ['label' => $b['label'], 'visitors' => 0], $buckets)];
+        if (! $convQ) {
+            return $empty;
         }
 
-        $hits = DB::table('hits')
-            ->where('site_id', $site->id)
-            ->whereIn('visitor_id', array_keys($conv))
-            ->orderBy('created_at')
-            ->get(['visitor_id', 'created_at'])
-            ->groupBy('visitor_id');
-
-        $days = [];
-        $sessions = [];
-        foreach ($conv as $id => $firstConv) {
-            $ts = $hits[$id]->pluck('created_at')->filter(fn ($t) => $t <= $firstConv)->values();
-            $days[] = (strtotime($firstConv) - strtotime($ts[0])) / 86400;
-            $n = 1;
-            for ($i = 1; $i < count($ts); $i++) {
-                if (strtotime($ts[$i]) - strtotime($ts[$i - 1]) > 1800) {
-                    $n++;
-                }
-            }
-            $sessions[] = $n;
+        // per-visitor days-to-convert and session count (30-min gaps), computed in
+        // SQL over each visitor's hits up to their first conversion — only one
+        // small row per converting visitor reaches PHP
+        [$f, $t] = Stats::utcBounds($from, $to);
+        $epoch = SqlDialect::epoch(...);
+        $rows = DB::select(
+            "WITH conv AS (
+                SELECT * FROM ({$convQ->toSql()}) c WHERE first_conv BETWEEN ? AND ?
+            ), h AS (
+                SELECT hits.visitor_id, hits.created_at, conv.first_conv,
+                       CASE WHEN LAG(hits.created_at) OVER w IS NULL
+                            OR {$epoch('hits.created_at')} - {$epoch('LAG(hits.created_at) OVER w')} > 1800
+                            THEN 1 ELSE 0 END AS s0
+                FROM hits JOIN conv ON conv.visitor_id = hits.visitor_id AND hits.created_at <= conv.first_conv
+                WHERE hits.site_id = ?
+                WINDOW w AS (PARTITION BY hits.visitor_id ORDER BY hits.created_at)
+            )
+            SELECT ({$epoch('MAX(first_conv)')} - {$epoch('MIN(created_at)')}) / 86400.0 AS days,
+                   SUM(s0) AS sessions
+            FROM h GROUP BY visitor_id",
+            [...$convQ->getBindings(), $f->toDateTimeString(), $t->toDateTimeString(), $site->id]
+        );
+        if (! $rows) {
+            return $empty;
         }
+
+        $days = array_map(fn ($r) => (float) $r->days, $rows);
+        $sessions = array_map(fn ($r) => (int) $r->sessions, $rows);
         foreach ($days as $d) {
             foreach ($buckets as &$b) {
                 if ($d < $b['max']) {
@@ -271,7 +292,7 @@ class Tier2Stats
         };
 
         return [
-            'identified' => count($conv),
+            'identified' => count($rows),
             'median_days' => round($median($days), 1),
             'median_sessions' => round($median($sessions), 1),
             'buckets' => array_map(fn ($b) => ['label' => $b['label'], 'visitors' => $b['visitors']], $buckets),
