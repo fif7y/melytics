@@ -366,7 +366,7 @@ class Stats
                     ->orderByRaw($expr)
                     ->selectRaw("$expr as t, COUNT(*) as pageviews, COUNT(DISTINCT visitor_hash) as visitors")
                     ->get(),
-                $from, $to, $interval, $offsetMin
+                $from, $to, $interval
             );
         }
 
@@ -383,7 +383,7 @@ class Stats
                 ->orderBy($col)
                 ->select([$col.' as t', 'pageviews', 'visitors', 'sessions', 'bounces', 'duration_sum'])
                 ->get(),
-            $from, $to, $interval, $offsetMin
+            $from, $to, $interval
         );
     }
 
@@ -393,7 +393,7 @@ class Stats
      * instead of the line bridging over them). Buckets in the future — past
      * the site-local "now" — are not emitted.
      */
-    private static function zeroFill($rows, Carbon $from, Carbon $to, string $interval, int $offsetMin)
+    private static function zeroFill($rows, Carbon $from, Carbon $to, string $interval)
     {
         $fmt = $interval === 'hour' ? 'Y-m-d H:00:00' : 'Y-m-d';
         $byT = $rows->keyBy('t');
@@ -401,7 +401,10 @@ class Stats
             array_fill_keys($rows->first() ? array_keys((array) $rows->first()) : ['pageviews', 'visitors'], 0),
             []
         );
-        $nowLocal = now()->addMinutes($offsetMin);
+        // $from carries the site timezone (see range()); Carbon comparisons are
+        // absolute instants, so "now" must be tz-aware too — offset-shifting a UTC
+        // Carbon lands offsetMin early and truncates the tail of today's chart.
+        $nowLocal = now($from->getTimezone());
         $end = ($interval === 'hour' ? $to->copy()->endOfDay() : $to->copy())->min($nowLocal);
 
         $out = collect();
