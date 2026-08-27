@@ -1,10 +1,9 @@
 # melytics
 
 <p align="center">
-  <a href="https://github.com/fif7y/melytics/stargazers"><img src="https://img.shields.io/github/stars/fif7y/melytics?color=2ea44f" alt="GitHub stars"></a>
   <a href="deploy/shared-hosting.md"><img src="https://img.shields.io/badge/runs_on-shared_hosting-E8A33D" alt="Runs on shared hosting"></a>
   <a href="mcp/"><img src="https://img.shields.io/badge/AI-MCP_server-8A63D2" alt="Bundled MCP server"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/github/license/fif7y/melytics" alt="License: AGPL-3.0"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-2ea44f" alt="License: AGPL-3.0"></a>
   <a href="https://github.com/sponsors/fif7y"><img src="https://img.shields.io/badge/sponsor-%E2%9D%A4-ea4aaa" alt="Sponsor melytics"></a>
 </p>
 
