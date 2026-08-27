@@ -279,6 +279,15 @@ async function runUpdate() {
   }
 }
 
+// Dismiss is session-scoped on purpose: the reminder must come back until the
+// cron actually runs, but shouldn't nag within one sitting (cron activation
+// can lag ~30 min on shared hosts).
+const cronBannerHidden = ref(sessionStorage.getItem('melytics_cron_banner') === 'hidden')
+function hideCronBanner() {
+  cronBannerHidden.value = true
+  sessionStorage.setItem('melytics_cron_banner', 'hidden')
+}
+
 const resent = ref(false)
 async function resendVerification() {
   await api('/auth/resend-verification', { method: 'POST' })
@@ -471,14 +480,26 @@ async function logout() {
     </Teleport>
 
     <div
-      v-if="me?.cron_stale"
-      class="mb-6 flex flex-wrap items-center gap-3 rounded-[14px] bg-[var(--accent-soft)] px-4 py-3 text-sm"
+      v-if="me?.cron_stale && !cronBannerHidden"
+      class="mb-6 flex items-start gap-3 rounded-[14px] bg-[var(--accent-soft)] px-4 py-3 text-sm"
     >
-      <span>
-        Stats update only when you open the dashboard — the every-minute cron job isn't running.
-        Add it in your hosting panel for always-fresh stats and email reports:
-        <code class="rounded bg-[var(--bg)] px-1.5 py-0.5 text-xs select-all break-all">{{ me.cron_line }}</code>
-      </span>
+      <div class="min-w-0 flex-1">
+        <p>
+          Stats update only when you open the dashboard — the every-minute cron job isn't running.
+          Add it in your hosting panel for always-fresh stats and email reports:
+          <code class="rounded bg-[var(--bg)] px-1.5 py-0.5 text-xs select-all break-all">{{ me.cron_line }}</code>
+        </p>
+        <p class="mt-1.5 text-xs text-[var(--ink-3)]">
+          Already added it? Some hosts take up to ~30 minutes before a new cron job first runs — this banner clears itself once it does.
+        </p>
+      </div>
+      <button
+        class="-mr-1 -mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[var(--ink-3)] hover:bg-[var(--bg)] hover:text-[var(--ink)]"
+        title="Hide until next visit"
+        @click="hideCronBanner"
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+      </button>
     </div>
 
     <div
