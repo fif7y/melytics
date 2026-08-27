@@ -1,17 +1,17 @@
 # First-party proxy template (Apache / shared hosting)
 # Put these rules in the .htaccess of the SITE BEING MEASURED so the tracker
 # script and ingest calls are same-origin — ad blockers can't tell them from
-# the site's own requests. Replace stats.fif7y.com with your melytics host.
+# the site's own requests. Replace stats.example.com with your melytics host.
 
 <IfModule mod_rewrite.c>
 RewriteEngine On
 
 # Serve the tracker script first-party under a neutral name
-RewriteRule ^js/app-m\.js$ https://stats.fif7y.com/m.js [P,L]
+RewriteRule ^js/app-m\.js$ https://stats.example.com/m.js [P,L]
 
 # Proxy ingest (fetch POST + noscript pixel) first-party
-RewriteRule ^api/echo$ https://stats.fif7y.com/api/echo [P,L]
-RewriteRule ^api/echo\.gif$ https://stats.fif7y.com/api/echo.gif [P,L]
+RewriteRule ^api/echo$ https://stats.example.com/api/echo [P,L]
+RewriteRule ^api/echo\.gif$ https://stats.example.com/api/echo.gif [P,L]
 </IfModule>
 
 # Snippet to add before </body> on the measured site:

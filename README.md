@@ -113,7 +113,7 @@ exists in the other theme — see `docs/screenshots/`.
 | `dashboard/` | Vue 3 + Tailwind SPA — mounts anywhere (relative base + hash router) |
 | `tracker/` | The snippet. <1KB gzipped, zero deps |
 | `mcp/` | MCP server (stdio, 8 tools) over the stats API |
-| `deploy/` | Hostinger shared-hosting guide, first-party proxy template, docker-compose for VPS |
+| `deploy/` | Shared-hosting guide (any cPanel-style host), first-party proxy template, docker-compose for VPS |
 | `docs/` | Session handoff log, screenshots |
 
 ## Quick start (local)
