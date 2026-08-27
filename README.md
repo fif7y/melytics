@@ -19,7 +19,7 @@ consentless by default, consent-gated extras only where the law requires.
   <a href="https://github.com/fif7y/melytics/releases"><img src="https://img.shields.io/github/downloads/fif7y/melytics/total?color=2ea44f&cacheSeconds=3600" alt="Downloads"></a>
 </p>
 
-**Runs on the $3/mo shared hosting you already have. Talks to your AI.**
+**Runs on the cheap shared hosting you already have. Talks to your AI.**
 
 - **No VPS, no Docker, no ClickHouse.** Every other self-hosted analytics
   assumes a server you administer. melytics runs on plain cPanel-style
