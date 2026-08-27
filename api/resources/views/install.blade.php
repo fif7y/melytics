@@ -149,18 +149,12 @@
       <header>
         <div class="brand rise"><b>melytics</b> · setup</div>
         <h1 class="rise d1">You’re <span style="color:var(--ink-3)">(almost)</span> <span class="a">live.</span></h1>
-        <p class="lede rise d2">Three copy-pastes left — then {{ $site->domain }} has private, cookieless analytics.</p>
+        <p class="lede rise d2">Two copy-pastes and a sign-in — then {{ $site->domain }} has private, cookieless analytics.</p>
       </header>
 
       <div class="card rise d3">
         <div class="step" style="margin-top:.2rem">
           <span class="n">01</span>
-          <h2>Sign in to your dashboard</h2>
-          <p><a href="{{ $origin }}/app/">{{ $origin }}/app/</a> — the email and password you just chose.</p>
-        </div>
-
-        <div class="step">
-          <span class="n">02</span>
           <h2>Add the snippet to {{ $site->domain }}</h2>
           <p>Paste it right before <code>&lt;/body&gt;</code>:</p>
           <div class="copyblock">
@@ -173,7 +167,7 @@
         </div>
 
         <div class="step">
-          <span class="n">03</span>
+          <span class="n">02</span>
           <h2>Add the cron job</h2>
           <p>In your hosting panel’s Cron Jobs, set this to run <strong>every minute</strong> — it keeps stats rolling up:</p>
           <div class="copyblock">
@@ -187,10 +181,13 @@
           reminder banner disappears once it has.</p>
         </div>
 
-        <div class="section" style="margin-top:2rem">Check it worked</div>
-        <p>Paste the snippet, visit your site once, then open the dashboard — you should see
-        yourself under <strong>Live now</strong> right away, and the day’s numbers within a
-        minute of the cron’s first run. Nothing after a few minutes? Recheck steps 02 and 03.</p>
+        <div class="step">
+          <span class="n">03</span>
+          <h2>Sign in to your dashboard</h2>
+          <p>With the email and password you just chose. Visit your site once first — you should
+          see yourself under <strong>Live now</strong> right away, and the day’s numbers within a
+          minute of the cron’s first run. Nothing after a few minutes? Recheck steps 01 and 02.</p>
+        </div>
 
         <a class="go" href="{{ $origin }}/app/">Open the dashboard</a>
       </div>
