@@ -12,6 +12,13 @@ Privacy-first, cookieless web analytics. A modern dashboard,
 ad-blocker-resistant first-party ingestion, and a two-tier privacy model —
 consentless by default, consent-gated extras only where the law requires.
 
+<p align="center">
+  <a href="https://github.com/fif7y/melytics/releases/latest/download/melytics.zip"><img src="https://img.shields.io/badge/⬇_Download_melytics-2a78d6?style=for-the-badge" alt="Download melytics"></a>
+  <br>
+  <a href="https://github.com/fif7y/melytics/releases/latest"><img src="https://img.shields.io/github/v/release/fif7y/melytics?cacheSeconds=3600" alt="Latest release"></a>
+  <a href="https://github.com/fif7y/melytics/releases"><img src="https://img.shields.io/github/downloads/fif7y/melytics/total?color=2ea44f&cacheSeconds=3600" alt="Downloads"></a>
+</p>
+
 **Runs on the $3/mo shared hosting you already have. Talks to your AI.**
 
 - **No VPS, no Docker, no ClickHouse.** Every other self-hosted analytics
