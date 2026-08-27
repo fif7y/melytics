@@ -10,6 +10,12 @@
   --ink-3: #8a8984;
   --accent: #2a78d6;
   --accent-soft: rgba(42, 120, 214, 0.12);
+  /* Accent palette (Account → Theme) — each ≥4.5:1 on bg/surface in its mode */
+  --accent-blue: #2a78d6;
+  --accent-violet: #7c3aed;
+  --accent-teal: #0f766e;
+  --accent-amber: #b45309;
+  --accent-rose: #be185d;
   --compare: #b9b8b1;
   --up: #008300;
   --warn: #d97706;
@@ -29,6 +35,11 @@
     --ink-3: #7d7c75;
     --accent: #3987e5;
     --accent-soft: rgba(57, 135, 229, 0.16);
+    --accent-blue: #3987e5;
+    --accent-violet: #a78bfa;
+    --accent-teal: #2dd4bf;
+    --accent-amber: #f59e0b;
+    --accent-rose: #fb7185;
     --compare: #4a4a46;
     --up: #35a55a;
     --warn: #e8a13d;
@@ -46,11 +57,34 @@
   --ink-3: #7d7c75;
   --accent: #3987e5;
   --accent-soft: rgba(57, 135, 229, 0.16);
+  --accent-blue: #3987e5;
+  --accent-violet: #a78bfa;
+  --accent-teal: #2dd4bf;
+  --accent-amber: #f59e0b;
+  --accent-rose: #fb7185;
   --compare: #4a4a46;
   --up: #35a55a;
   --warn: #e8a13d;
   --down: #e66767;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 16px rgba(0, 0, 0, 0.25);
+}
+
+/* Chosen accent (data-accent on <html>; blue = default, no attribute) */
+:root[data-accent='violet'] {
+  --accent: var(--accent-violet);
+  --accent-soft: color-mix(in srgb, var(--accent-violet) 14%, transparent);
+}
+:root[data-accent='teal'] {
+  --accent: var(--accent-teal);
+  --accent-soft: color-mix(in srgb, var(--accent-teal) 14%, transparent);
+}
+:root[data-accent='amber'] {
+  --accent: var(--accent-amber);
+  --accent-soft: color-mix(in srgb, var(--accent-amber) 14%, transparent);
+}
+:root[data-accent='rose'] {
+  --accent: var(--accent-rose);
+  --accent-soft: color-mix(in srgb, var(--accent-rose) 14%, transparent);
 }
 
 html,

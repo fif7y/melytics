@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { Me, Site } from '../lib/api'
 import Toggle from './Toggle.vue'
-import { theme, setTheme, type Theme } from '../lib/theme'
+import { theme, setTheme, type Theme, accent, setAccent, ACCENTS } from '../lib/theme'
 
 const THEMES: { key: Theme; label: string }[] = [
   { key: 'system', label: 'System' },
@@ -106,6 +106,19 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey))
               >
                 {{ t.label }}
               </button>
+            </div>
+            <div class="my-4 flex gap-3 px-1">
+              <button
+                v-for="a in ACCENTS"
+                :key="a"
+                class="h-6 w-6 rounded-full transition-shadow"
+                :style="{ background: `var(--accent-${a})` }"
+                :class="accent === a ? 'ring-2 ring-[var(--ink)] ring-offset-2 ring-offset-[var(--surface)]' : 'hover:ring-2 hover:ring-[var(--ink-3)] hover:ring-offset-2 hover:ring-offset-[var(--surface)]'"
+                :title="a.charAt(0).toUpperCase() + a.slice(1)"
+                :aria-label="`${a} accent`"
+                :aria-pressed="accent === a"
+                @click="setAccent(a)"
+              />
             </div>
           </section>
 

@@ -14,7 +14,7 @@ import LoyaltyCard from '../components/LoyaltyCard.vue'
 import AttributionCard from '../components/AttributionCard.vue'
 import TimeToConvertCard from '../components/TimeToConvertCard.vue'
 import SharePanel from '../components/SharePanel.vue'
-import { theme } from '../lib/theme'
+import { theme, accent } from '../lib/theme'
 import { usePersistedRef, safeJson } from '../lib/persist'
 import { useDateRange, todayIso, RANGES, RANGE_PRESETS } from '../lib/useDateRange'
 import SettingsPanel from '../components/SettingsPanel.vue'
@@ -526,7 +526,7 @@ async function logout() {
           <button class="rounded-lg px-3 py-1.5 text-sm text-white bg-[var(--accent)]">Save</button>
         </form>
 
-        <TimeChart :key="theme" :series="stats.series" :previous="stats.previous_series" :metric="metric" :annotations="annotations" :line-style="chartStyle" />
+        <TimeChart :key="`${theme}-${accent}`" :series="stats.series" :previous="stats.previous_series" :metric="metric" :annotations="annotations" :line-style="chartStyle" />
 
         <div v-if="annotations.length" class="mt-2 flex flex-wrap gap-1.5">
           <span
