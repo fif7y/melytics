@@ -112,6 +112,15 @@ class AuthController extends Controller
         ]);
     }
 
+    // One MCP token per user — regenerating revokes the previous one.
+    public function mcpToken(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $user->tokens()->where('name', 'mcp')->delete();
+
+        return response()->json(['token' => $user->createToken('mcp')->plainTextToken]);
+    }
+
     public function logout(Request $request): JsonResponse
     {
         $request->user()->currentAccessToken()->delete();

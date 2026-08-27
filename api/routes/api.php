@@ -6,6 +6,7 @@ use App\Http\Controllers\FunnelController;
 use App\Http\Controllers\GoogleAuthController;
 use App\Http\Controllers\GoalController;
 use App\Http\Controllers\IngestController;
+use App\Http\Controllers\McpController;
 use App\Http\Controllers\PublicShareController;
 use App\Http\Controllers\ShareLinkController;
 use App\Http\Controllers\SiteController;
@@ -23,6 +24,11 @@ Route::get('/auth/config', fn () => [
     'google' => GoogleAuthController::enabled(),
 ]);
 
+// MCP for AI assistants — token in the Authorization header, or in the path
+// for clients that can't send headers (claude.ai custom connectors).
+Route::post('/mcp/{token?}', [McpController::class, 'handle'])->middleware('throttle:120,1');
+Route::match(['get', 'delete'], '/mcp/{token?}', [McpController::class, 'reject']);
+
 Route::post('/auth/login', [AuthController::class, 'login'])->middleware('throttle:10,1');
 Route::get('/auth/google/redirect', [GoogleAuthController::class, 'redirect'])->middleware('throttle:10,1');
 Route::get('/auth/google/callback', [GoogleAuthController::class, 'callback'])->middleware('throttle:10,1');
@@ -36,6 +42,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/auth/logout', [AuthController::class, 'logout']);
     Route::get('/auth/me', [AuthController::class, 'me']);
     Route::post('/auth/resend-verification', [AuthController::class, 'resendVerification'])->middleware('throttle:5,1');
+    Route::post('/auth/mcp-token', [AuthController::class, 'mcpToken'])->middleware('throttle:5,1');
     Route::put('/auth/google/settings', [GoogleAuthController::class, 'saveSettings']);
     Route::delete('/auth/google/settings', [GoogleAuthController::class, 'removeSettings']);
 

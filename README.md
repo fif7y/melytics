@@ -27,9 +27,10 @@ consentless by default, consent-gated extras only where the law requires.
   assumes a server you administer. melytics runs on plain cPanel-style
   shared hosting: PHP + SQLite + a cron line. If your host can run
   WordPress, it can run melytics — see `deploy/shared-hosting.md`.
-- **AI-native.** A bundled MCP server exposes your stats to Claude or any
-  MCP client — "what were my top pages last week?", "did the launch spike
-  hold?" — answered from your own data, no dashboard tab needed.
+- **AI-native.** Every install is an MCP server — paste a connector URL from
+  the dashboard into Claude and ask "what were my top pages last week?",
+  "did the launch spike hold?" — answered from your own data, no dashboard
+  tab needed. See `mcp/README.md`.
 
 ![Dashboard, light](docs/screenshots/dashboard-light.png)
 
@@ -129,7 +130,7 @@ exists in the other theme — see `docs/screenshots/`.
 </p>
 
 **Integrations**
-- MCP server — query your analytics from Claude or any MCP client (8 tools)
+- MCP server built in — connect Claude via a URL from the dashboard, or any MCP client (8 tools, `mcp/README.md`)
 - Plain JSON API behind the dashboard
 
 ## Layout
@@ -139,7 +140,7 @@ exists in the other theme — see `docs/screenshots/`.
 | `api/` | Laravel API — ingest, enrichment, rollups, stats endpoints |
 | `dashboard/` | Vue 3 + Tailwind SPA — mounts anywhere (relative base + hash router) |
 | `tracker/` | The snippet. <1KB gzipped, zero deps |
-| `mcp/` | MCP server (stdio, 8 tools) over the stats API |
+| `mcp/` | AI assistant setup guide + optional local stdio MCP server (the HTTP MCP endpoint lives in the app itself) |
 | `deploy/` | Shared-hosting guide (any cPanel-style host), first-party proxy template, docker-compose for VPS |
 | `docs/` | Session handoff log, screenshots |
 

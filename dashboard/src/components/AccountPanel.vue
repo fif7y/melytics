@@ -102,6 +102,35 @@ async function disableGoogle() {
   }
 }
 
+// MCP connector — one token per user; regenerating revokes the previous one.
+const mcpSetup = ref(false)
+const mcpUrl = ref('')
+const mcpBusy = ref(false)
+const mcpError = ref('')
+const mcpCopied = ref(false)
+
+async function generateMcp() {
+  mcpBusy.value = true
+  mcpError.value = ''
+  try {
+    const { token } = await api<{ token: string }>('/auth/mcp-token', { method: 'POST' })
+    // Sanctum tokens contain "|" — encode so the URL is valid for strict clients
+    mcpUrl.value = `${window.MELYTICS_API ?? location.origin + '/api'}/mcp/${encodeURIComponent(token)}`
+  } catch (e) {
+    mcpError.value = e instanceof Error ? e.message : 'Could not generate'
+  } finally {
+    mcpBusy.value = false
+  }
+}
+
+async function copyMcp() {
+  try {
+    await navigator.clipboard.writeText(mcpUrl.value)
+    mcpCopied.value = true
+    setTimeout(() => (mcpCopied.value = false), 1500)
+  } catch {}
+}
+
 function onKey(e: KeyboardEvent) {
   if (e.key === 'Escape') open.value = false
 }
@@ -251,6 +280,47 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey))
               Anyone with an account here can sign in with their Google account of the same email.
             </p>
             <p v-if="gError && !gSetup" class="px-2 text-xs text-[var(--down)]">{{ gError }}</p>
+          </section>
+
+          <section>
+            <div class="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--ink-3)]">AI assistants</div>
+            <div class="flex items-center justify-between px-2 py-1 text-sm">
+              <span>Ask AI about your stats</span>
+              <button class="text-xs text-[var(--accent)]" @click="mcpSetup = !mcpSetup">
+                {{ mcpSetup ? 'Hide setup' : 'Set up' }}
+              </button>
+            </div>
+
+            <div v-if="mcpSetup" class="mt-1 space-y-3 rounded-lg bg-[var(--bg)] p-3 text-xs text-[var(--ink-2)]">
+              <p>
+                Connect Claude — or any MCP-capable assistant — to this dashboard, then just ask:
+                <span class="italic">“how was traffic this week?”</span>
+              </p>
+              <button
+                v-if="!mcpUrl"
+                class="w-full rounded-md bg-[var(--accent)] py-1.5 font-medium text-white disabled:opacity-50"
+                :disabled="mcpBusy"
+                @click="generateMcp"
+              >Generate connector URL</button>
+              <template v-else>
+                <div>
+                  <button
+                    class="w-full rounded-md bg-[var(--surface)] px-2 py-1.5 text-left font-mono text-[10px] break-all hover:ring-1 ring-[var(--accent)]"
+                    :title="mcpCopied ? 'Copied' : 'Click to copy'"
+                    @click="copyMcp"
+                  >{{ mcpUrl }}</button>
+                  <p class="mt-0.5" :class="mcpCopied ? 'text-[var(--accent)]' : 'text-[var(--ink-3)]'">{{ mcpCopied ? 'Copied.' : 'Click to copy.' }}</p>
+                </div>
+                <p>
+                  In Claude: <span class="font-medium text-[var(--ink)]">Settings → Connectors → Add custom connector</span>,
+                  paste the URL. Done — Claude can now read your stats.
+                </p>
+                <p class="text-[var(--ink-3)]">
+                  The URL contains a secret — treat it like a password. Generating a new one revokes this one.
+                </p>
+              </template>
+              <p v-if="mcpError" class="text-[var(--down)]">{{ mcpError }}</p>
+            </div>
           </section>
 
           <section>
