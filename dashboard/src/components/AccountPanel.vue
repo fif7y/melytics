@@ -316,6 +316,10 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey))
             </svg>
             Sign out
           </button>
+          <p v-if="me?.version" class="mt-2 px-2 text-xs text-[var(--ink-3)]">
+            melytics {{ me.version === 'dev' ? 'dev' : `v${me.version}` }}
+            <template v-if="me.update"> · <span class="text-[var(--accent)]">v{{ me.update.latest }} available</span></template>
+          </p>
         </div>
       </aside>
     </Transition>

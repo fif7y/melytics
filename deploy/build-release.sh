@@ -29,9 +29,11 @@ rsync -a "$ROOT/dashboard/dist/" "$STAGE/public/app/"
 echo "→ tracker build"
 (cd "$ROOT/tracker" && npx esbuild src/m.js --minify --format=iife --outfile="$STAGE/public/m.js" --log-level=warning)
 
-echo "→ release .env + root .htaccess"
+echo "→ release .env + root .htaccess + VERSION"
 cp "$ROOT/deploy/release-env-template" "$STAGE/.env"
 cp "$ROOT/deploy/release-root-htaccess" "$STAGE/.htaccess"
+# Read back by App\Support\Version — update check + one-click updater key off it.
+printf '%s\n' "$VERSION" > "$STAGE/VERSION"
 
 OUT="$ROOT/melytics-$VERSION.zip"
 rm -f "$OUT" "$ROOT/melytics.zip"

@@ -132,6 +132,9 @@ class AuthController extends Controller
             'cron_stale' => $cronStale = \App\Support\RollupHeartbeat::cronStale(300),
             'cron_line' => $cronStale ? 'cd '.base_path().' && php artisan schedule:run >> /dev/null 2>&1' : null,
             'mail_off' => config('mail.default') === 'log',
+            'is_admin' => $user->id === User::min('id'),
+            'version' => \App\Support\Version::current(),
+            'update' => \App\Support\Version::updateAvailable(),
         ]);
     }
 }

@@ -156,6 +156,12 @@ Grab the release zip (or build one with `bash deploy/build-release.sh`), then:
 Everything runs on SQLite — no database to create. Details and troubleshooting
 in [`deploy/shared-hosting.md`](deploy/shared-hosting.md).
 
+**Updates are one click too.** When a new release is out, the dashboard shows a
+banner (and Account shows the version) — the admin hits *Update now* and the
+instance downloads the release, swaps itself in place, and migrates. Your
+config, data, and `.htaccess` are never touched. Git checkouts update with
+`git pull` instead.
+
 ## Quick start (local)
 
 ```bash

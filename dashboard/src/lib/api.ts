@@ -84,6 +84,9 @@ export interface Me {
   cron_stale?: boolean
   cron_line?: string | null
   mail_off?: boolean
+  is_admin?: boolean
+  version?: string
+  update?: { latest: string; url: string } | null
 }
 export interface Retention {
   identified: number

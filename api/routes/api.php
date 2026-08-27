@@ -10,6 +10,7 @@ use App\Http\Controllers\PublicShareController;
 use App\Http\Controllers\ShareLinkController;
 use App\Http\Controllers\SiteController;
 use App\Http\Controllers\StatsController;
+use App\Http\Controllers\UpdateController;
 use Illuminate\Support\Facades\Route;
 
 // Ingest — neutral naming on purpose (ad-blocker lists match on keywords).
@@ -37,6 +38,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/auth/resend-verification', [AuthController::class, 'resendVerification'])->middleware('throttle:5,1');
     Route::put('/auth/google/settings', [GoogleAuthController::class, 'saveSettings']);
     Route::delete('/auth/google/settings', [GoogleAuthController::class, 'removeSettings']);
+
+    Route::post('/update/check', [UpdateController::class, 'check'])->middleware('throttle:10,1');
+    Route::post('/update/run', [UpdateController::class, 'run'])->middleware('throttle:3,10');
 
     Route::apiResource('sites', SiteController::class)->except('show');
 

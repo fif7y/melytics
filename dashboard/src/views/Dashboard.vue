@@ -266,6 +266,19 @@ watch(
   },
   { immediate: true }
 )
+// One-click self-update (admin, release installs). The API swaps the code in
+// place and migrates; a full reload picks up the new dashboard build.
+const updateState = ref<'idle' | 'running' | 'failed'>('idle')
+async function runUpdate() {
+  updateState.value = 'running'
+  try {
+    await api('/update/run', { method: 'POST' })
+    location.reload()
+  } catch {
+    updateState.value = 'failed'
+  }
+}
+
 const resent = ref(false)
 async function resendVerification() {
   await api('/auth/resend-verification', { method: 'POST' })
@@ -466,6 +479,27 @@ async function logout() {
         Add it in your hosting panel for always-fresh stats and email reports:
         <code class="rounded bg-[var(--bg)] px-1.5 py-0.5 text-xs select-all break-all">{{ me.cron_line }}</code>
       </span>
+    </div>
+
+    <div
+      v-if="me?.update"
+      class="mb-6 flex flex-wrap items-center gap-3 rounded-[14px] bg-[var(--accent-soft)] px-4 py-3 text-sm"
+    >
+      <span>
+        melytics <b>v{{ me.update.latest }}</b> is out — you're on v{{ me.version }}.
+        <a :href="me.update.url" target="_blank" rel="noopener" class="font-medium text-[var(--accent)] hover:opacity-80">What's new</a>
+      </span>
+      <template v-if="me.is_admin">
+        <button
+          v-if="updateState !== 'running'"
+          class="rounded-lg bg-[var(--accent)] px-3 py-1.5 text-xs font-medium text-white hover:opacity-90"
+          @click="runUpdate"
+        >
+          {{ updateState === 'failed' ? 'Retry update' : 'Update now' }}
+        </button>
+        <span v-else class="text-[var(--ink-3)]">Updating — this takes a minute, keep this tab open…</span>
+        <span v-if="updateState === 'failed'" class="text-[var(--ink-3)]">Update failed — try again, or update manually from GitHub.</span>
+      </template>
     </div>
 
     <div
