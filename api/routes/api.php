@@ -3,6 +3,7 @@
 use App\Http\Controllers\AnnotationController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\FunnelController;
+use App\Http\Controllers\GoogleAuthController;
 use App\Http\Controllers\GoalController;
 use App\Http\Controllers\IngestController;
 use App\Http\Controllers\PublicShareController;
@@ -15,7 +16,15 @@ use Illuminate\Support\Facades\Route;
 Route::post('/echo', IngestController::class);
 Route::get('/echo.gif', [IngestController::class, 'pixel']);
 
+// What the login screen may offer on this instance (unauthenticated by design).
+Route::get('/auth/config', fn () => [
+    'registration' => (bool) config('melytics.registration'),
+    'google' => GoogleAuthController::enabled(),
+]);
+
 Route::post('/auth/login', [AuthController::class, 'login'])->middleware('throttle:10,1');
+Route::get('/auth/google/redirect', [GoogleAuthController::class, 'redirect'])->middleware('throttle:10,1');
+Route::get('/auth/google/callback', [GoogleAuthController::class, 'callback'])->middleware('throttle:10,1');
 Route::post('/auth/register', [AuthController::class, 'register'])->middleware('throttle:5,1');
 Route::post('/auth/forgot', [AuthController::class, 'forgot'])->middleware('throttle:5,1');
 Route::post('/auth/reset', [AuthController::class, 'reset'])->middleware('throttle:5,1');
@@ -26,6 +35,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/auth/logout', [AuthController::class, 'logout']);
     Route::get('/auth/me', [AuthController::class, 'me']);
     Route::post('/auth/resend-verification', [AuthController::class, 'resendVerification'])->middleware('throttle:5,1');
+    Route::put('/auth/google/settings', [GoogleAuthController::class, 'saveSettings']);
+    Route::delete('/auth/google/settings', [GoogleAuthController::class, 'removeSettings']);
 
     Route::apiResource('sites', SiteController::class)->except('show');
 

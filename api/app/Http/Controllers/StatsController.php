@@ -16,9 +16,31 @@ class StatsController extends Controller
     public function stats(Request $request, Site $site): JsonResponse
     {
         $this->authorizeSite($request, $site);
+        $this->lazyRollup();
         [$from, $to, $interval] = $this->stats->range($request->query('from'), $request->query('to'), $request->query('interval'), $site->timezone);
 
         return response()->json($this->stats->overview($site, $from, $to, $interval, $this->filterParam($request)));
+    }
+
+    // No cron? Self-heal: roll up the trailing hour when someone actually looks
+    // at their stats and the data is stale. Lock guards concurrent dashboards;
+    // cron (schedule:run) stays the real driver — it also powers alerts/digests.
+    private function lazyRollup(): void
+    {
+        if (! \App\Support\RollupHeartbeat::dataStale(120)) {
+            return;
+        }
+        $lock = cache()->lock('melytics-lazy-rollup', 120);
+        if (! $lock->get()) {
+            return;
+        }
+        try {
+            \Illuminate\Support\Facades\Artisan::call('melytics:rollup', ['--hours' => 1, '--lazy' => true]);
+        } catch (\Throwable $e) {
+            report($e);
+        } finally {
+            $lock->release();
+        }
     }
 
     /** Parse an optional "dimension:value" cross-filter query param. */

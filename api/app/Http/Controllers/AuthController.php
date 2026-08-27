@@ -123,6 +123,15 @@ class AuthController extends Controller
     {
         $user = $request->user();
 
-        return response()->json(['id' => $user->id, 'name' => $user->name, 'email' => $user->email, 'verified' => (bool) $user->email_verified_at]);
+        return response()->json([
+            'id' => $user->id,
+            'name' => $user->name,
+            'email' => $user->email,
+            'verified' => (bool) $user->email_verified_at,
+            // Instance health, surfaced as dashboard banners/hints.
+            'cron_stale' => $cronStale = \App\Support\RollupHeartbeat::cronStale(300),
+            'cron_line' => $cronStale ? 'cd '.base_path().' && php artisan schedule:run >> /dev/null 2>&1' : null,
+            'mail_off' => config('mail.default') === 'log',
+        ]);
     }
 }

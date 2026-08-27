@@ -134,6 +134,21 @@ exists in the other theme — see `docs/screenshots/`.
 | `deploy/` | Shared-hosting guide (any cPanel-style host), first-party proxy template, docker-compose for VPS |
 | `docs/` | Session handoff log, screenshots |
 
+## Install without a terminal (shared hosting)
+
+Grab the release zip (or build one with `bash deploy/build-release.sh`), then:
+
+1. Upload and extract it into the folder your (sub)domain serves — a bundled
+   `.htaccess` handles the rest (no docroot fiddling). Or upload the one-file
+   `melytics-installer.php` and it fetches + unpacks the release for you.
+2. Visit `https://your-domain/` — the web installer checks the server, asks for
+   your login and first site, and hands you the tracking snippet plus the one
+   cron line to paste into your panel's Cron Jobs. (No cron yet? Stats refresh
+   whenever you open the dashboard, and it reminds you with the exact line.)
+
+Everything runs on SQLite — no database to create. Details and troubleshooting
+in [`deploy/shared-hosting.md`](deploy/shared-hosting.md).
+
 ## Quick start (local)
 
 ```bash

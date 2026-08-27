@@ -10,7 +10,9 @@ use Illuminate\Support\Facades\DB;
 
 class Rollup extends Command
 {
-    protected $signature = 'melytics:rollup {--hours=3 : Recompute this many trailing hours (and the days they touch)}';
+    protected $signature = 'melytics:rollup
+        {--hours=3 : Recompute this many trailing hours (and the days they touch)}
+        {--lazy : Internal — this run was triggered by a stats request, not cron}';
 
     protected $description = 'Recompute hourly/daily rollups from raw hits (idempotent, cron-safe)';
 
@@ -30,6 +32,7 @@ class Rollup extends Command
             $this->rollupPeriod($site->id, 'rollup_daily', 'day', 'day', $offset, $dayFrom);
         }
 
+        \App\Support\RollupHeartbeat::beat($this->option('lazy') ? 'lazy' : 'cron');
         $this->info('Rollups updated from '.$from->toDateTimeString());
 
         return self::SUCCESS;

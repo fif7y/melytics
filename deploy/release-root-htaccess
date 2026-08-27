@@ -1,0 +1,15 @@
+# melytics — makes the bundle work when extracted straight into a web root
+# (e.g. public_html) without repointing the docroot at public/.
+# If your docroot IS public/, this file is never consulted. Apache/LiteSpeed.
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Never serve application internals or secrets.
+    RewriteRule ^\.env - [F,L]
+    RewriteRule ^(app|bootstrap|config|database|resources|routes|storage|vendor|tests)(/|$) - [F,L]
+    RewriteRule ^(artisan|composer\.(json|lock)|package\.json|vite\.config\.js)$ - [F,L]
+
+    # Everything else is served from public/.
+    RewriteCond %{REQUEST_URI} !^/public/
+    RewriteRule ^(.*)$ public/$1 [L]
+</IfModule>

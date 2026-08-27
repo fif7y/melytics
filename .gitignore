@@ -7,3 +7,5 @@ dist/
 
 # session handoff log stays local (mirrored in the vault)
 docs/SESSION_LOG.md
+/melytics-*.zip
+/melytics.zip

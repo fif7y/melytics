@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import type { Me, Site } from '../lib/api'
+import { api, type Me, type Site } from '../lib/api'
 import Toggle from './Toggle.vue'
 import { theme, setTheme, type Theme, accent, setAccent, ACCENTS } from '../lib/theme'
 
@@ -43,6 +43,63 @@ function submitSite() {
   adding.value = false
   newName.value = ''
   newDomain.value = ''
+}
+
+// Google sign-in — guided in-app setup (admin pastes the two OAuth values,
+// the API persists them; no .env editing, no deploy guide).
+const googleOn = ref<boolean | null>(null)
+const gSetup = ref(false)
+const gClientId = ref('')
+const gSecret = ref('')
+const gBusy = ref(false)
+const gError = ref('')
+const gCopied = ref(false)
+const redirectUri = `${window.MELYTICS_API ?? location.origin + '/api'}/auth/google/callback`
+
+onMounted(async () => {
+  try {
+    googleOn.value = (await api<{ google: boolean }>('/auth/config')).google
+  } catch {}
+})
+
+async function copyRedirect() {
+  try {
+    await navigator.clipboard.writeText(redirectUri)
+    gCopied.value = true
+    setTimeout(() => (gCopied.value = false), 1500)
+  } catch {}
+}
+
+async function saveGoogle() {
+  gBusy.value = true
+  gError.value = ''
+  try {
+    await api('/auth/google/settings', {
+      method: 'PUT',
+      body: JSON.stringify({ client_id: gClientId.value.trim(), client_secret: gSecret.value.trim() }),
+    })
+    googleOn.value = true
+    gSetup.value = false
+    gClientId.value = ''
+    gSecret.value = ''
+  } catch (e) {
+    gError.value = e instanceof Error ? e.message : 'Could not save'
+  } finally {
+    gBusy.value = false
+  }
+}
+
+async function disableGoogle() {
+  gBusy.value = true
+  gError.value = ''
+  try {
+    await api('/auth/google/settings', { method: 'DELETE' })
+    googleOn.value = false
+  } catch (e) {
+    gError.value = e instanceof Error ? e.message : 'Could not save'
+  } finally {
+    gBusy.value = false
+  }
 }
 
 function onKey(e: KeyboardEvent) {
@@ -127,6 +184,73 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey))
             <Toggle label="Weekly digest email" :on="site.digest_enabled" @change="(on) => emit('notify', 'digest_enabled', on)" />
             <Toggle label="Spike & drop alerts" :on="site.alerts_enabled" @change="(on) => emit('notify', 'alerts_enabled', on)" />
             <p class="mt-1 px-2 text-xs text-[var(--ink-3)]">Alerts compare today to the trailing week, at most once a day.</p>
+            <p v-if="me?.mail_off" class="mt-1.5 px-2 text-xs text-[var(--warn)]">
+              Email sending isn't configured, so these won't be delivered — set
+              <code class="rounded bg-[var(--bg)] px-1">MAIL_MAILER=sendmail</code> in .env (deploy guide has details).
+            </p>
+          </section>
+
+          <section v-if="googleOn !== null">
+            <div class="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--ink-3)]">Sign-in</div>
+            <div class="flex items-center justify-between px-2 py-1 text-sm">
+              <span>Google sign-in</span>
+              <button
+                v-if="googleOn"
+                class="text-xs text-[var(--ink-3)] hover:text-[var(--down)]"
+                :disabled="gBusy"
+                @click="disableGoogle"
+              >On · turn off</button>
+              <button
+                v-else
+                class="text-xs text-[var(--accent)]"
+                @click="gSetup = !gSetup"
+              >{{ gSetup ? 'Hide setup' : 'Off · set up' }}</button>
+            </div>
+
+            <div v-if="gSetup && !googleOn" class="mt-1 space-y-3 rounded-lg bg-[var(--bg)] p-3 text-xs text-[var(--ink-2)]">
+              <p>
+                <span class="font-medium text-[var(--ink)]">1 ·</span>
+                <a
+                  class="text-[var(--accent)] underline-offset-2 hover:underline"
+                  href="https://console.cloud.google.com/apis/credentials/oauthclient"
+                  target="_blank" rel="noopener"
+                >Create an OAuth client at Google</a>
+                — choose type <span class="font-medium">Web application</span> (free, ~3 minutes).
+              </p>
+              <div>
+                <p><span class="font-medium text-[var(--ink)]">2 ·</span> Under “Authorized redirect URIs”, paste:</p>
+                <button
+                  class="mt-1.5 w-full rounded-md bg-[var(--surface)] px-2 py-1.5 text-left font-mono text-[10px] break-all hover:ring-1 ring-[var(--accent)]"
+                  :title="gCopied ? 'Copied' : 'Click to copy'"
+                  @click="copyRedirect"
+                >{{ redirectUri }}</button>
+                <p class="mt-0.5" :class="gCopied ? 'text-[var(--accent)]' : 'text-[var(--ink-3)]'">{{ gCopied ? 'Copied.' : 'Click to copy.' }}</p>
+              </div>
+              <div>
+                <p class="mb-1.5"><span class="font-medium text-[var(--ink)]">3 ·</span> Paste what Google gives you:</p>
+                <input
+                  v-model="gClientId"
+                  placeholder="Client ID (…apps.googleusercontent.com)"
+                  class="mb-2 w-full rounded-md bg-[var(--surface)] px-2 py-1.5 font-mono text-[10px] outline-none focus:ring-1 ring-[var(--accent)] placeholder:font-sans placeholder:text-xs placeholder:text-[var(--ink-3)]"
+                />
+                <input
+                  v-model="gSecret"
+                  type="password"
+                  placeholder="Client secret"
+                  class="w-full rounded-md bg-[var(--surface)] px-2 py-1.5 font-mono text-[10px] outline-none focus:ring-1 ring-[var(--accent)] placeholder:font-sans placeholder:text-xs placeholder:text-[var(--ink-3)]"
+                />
+              </div>
+              <button
+                class="w-full rounded-md bg-[var(--accent)] py-1.5 font-medium text-white disabled:opacity-50"
+                :disabled="gBusy || !gClientId || !gSecret"
+                @click="saveGoogle"
+              >Turn on Google sign-in</button>
+              <p v-if="gError" class="text-[var(--down)]">{{ gError }}</p>
+            </div>
+            <p v-else-if="googleOn" class="px-2 text-xs text-[var(--ink-3)]">
+              Anyone with an account here can sign in with their Google account of the same email.
+            </p>
+            <p v-if="gError && !gSetup" class="px-2 text-xs text-[var(--down)]">{{ gError }}</p>
           </section>
 
           <section>

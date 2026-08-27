@@ -3,6 +3,32 @@
 Works on any PHP shared or cloud host (cPanel, hPanel, Plesk, …) with PHP 8.2+,
 a database (MySQL or SQLite), and cron. Examples below use `stats.example.com`.
 
+## Easiest: release zip + web installer (no terminal)
+
+1. Build or download `melytics-<version>.zip` (`bash deploy/build-release.sh`).
+   It bundles the API with production dependencies, the dashboard at
+   `public/app/`, and the tracker at `public/m.js` — one docroot serves all three.
+2. Upload + extract via your panel's file manager — straight into the folder
+   your (sub)domain serves (e.g. `public_html/`) works: a bundled root
+   `.htaccess` routes everything through `public/` and blocks access to the
+   app internals. If you *can* point the document root at `…/melytics/public`
+   instead, do — it's tidier.
+3. Visit the domain → the installer at `/install` checks requirements, creates
+   your login and first site on SQLite, and shows the tracking snippet plus the
+   cron line to add in your panel (every minute):
+   `cd ~/melytics && php artisan schedule:run >> /dev/null 2>&1`
+
+   No cron yet? Stats still work — they refresh whenever the dashboard is
+   opened — but the cron makes them continuous and powers digest/alert emails.
+   The dashboard reminds you (with the exact line) until it's running.
+
+Even shorter: upload just `deploy/melytics-installer.php` into the folder your
+domain serves and open it in the browser — it downloads the latest release,
+unpacks it there, deletes itself, and drops you on the setup screen.
+
+The rest of this guide is the manual path — use it for MySQL, git deploys, or
+custom layouts.
+
 ## API (Laravel)
 
 1. Upload `api/` (or git-deploy the repo) outside the public docroot, e.g. `~/melytics/api`.
@@ -31,6 +57,20 @@ a database (MySQL or SQLite), and cron. Examples below use `stats.example.com`.
 
 See `htaccess-proxy-template.txt` — proxy `/js/app-m.js` and `/api/echo*`
 first-party, then drop the two-line snippet before `</body>`.
+
+## Optional: "Continue with Google"
+
+Easiest: in the dashboard, **Account → Sign-in → set up** walks you through it —
+it links to Google's console, gives you the redirect URI to paste, and stores
+the two values Google hands back. No file editing.
+
+Manually instead: create an OAuth 2.0 Client ID (type: Web application) at
+[console.cloud.google.com](https://console.cloud.google.com) with authorized
+redirect URI `https://stats.example.com/api/auth/google/callback`, then add
+`GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` to `.env`.
+
+Existing accounts match by email; new accounts via Google are only created when
+`MELYTICS_REGISTRATION=true`.
 
 ## Optional: country geolocation
 

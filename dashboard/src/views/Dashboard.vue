@@ -458,6 +458,17 @@ async function logout() {
     </Teleport>
 
     <div
+      v-if="me?.cron_stale"
+      class="mb-6 flex flex-wrap items-center gap-3 rounded-[14px] bg-[var(--accent-soft)] px-4 py-3 text-sm"
+    >
+      <span>
+        Stats update only when you open the dashboard — the every-minute cron job isn't running.
+        Add it in your hosting panel for always-fresh stats and email reports:
+        <code class="rounded bg-[var(--bg)] px-1.5 py-0.5 text-xs select-all break-all">{{ me.cron_line }}</code>
+      </span>
+    </div>
+
+    <div
       v-if="me && !me.verified"
       class="mb-6 flex flex-wrap items-center gap-3 rounded-[14px] bg-[var(--accent-soft)] px-4 py-3 text-sm"
     >

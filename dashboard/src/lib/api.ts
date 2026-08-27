@@ -81,6 +81,9 @@ export interface Me {
   name: string
   email: string
   verified: boolean
+  cron_stale?: boolean
+  cron_line?: string | null
+  mail_off?: boolean
 }
 export interface Retention {
   identified: number
