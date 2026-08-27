@@ -156,3 +156,9 @@ ad-blocker-resistant.
   with the Privacy toggle enabled. `melytics.consent(false)` wipes the id.
   Ask for consent only where the law requires it — geo-gate the prompt
   client-side (e.g. by IANA timezone).
+
+## License
+
+[AGPL-3.0](LICENSE). Self-host freely; if you offer melytics as a hosted
+service with modifications, you must share those changes under the same
+license.
