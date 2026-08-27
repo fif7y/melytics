@@ -4,13 +4,14 @@ namespace App\Http\Controllers;
 
 use App\Models\Site;
 use App\Services\Stats;
+use App\Services\Tier2Stats;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class StatsController extends Controller
 {
-    public function __construct(private Stats $stats) {}
+    public function __construct(private Stats $stats, private Tier2Stats $tier2) {}
 
     public function stats(Request $request, Site $site): JsonResponse
     {
@@ -37,7 +38,7 @@ class StatsController extends Controller
     {
         $this->authorizeSite($request, $site);
         $dimension = $request->validate([
-            'dimension' => 'required|in:page,referrer,country,device,browser,os,utm_source,utm_medium,utm_campaign,event,entry_page,exit_page,outbound,download,not_found,channel',
+            'dimension' => ['required', \Illuminate\Validation\Rule::in(Stats::breakdownDimensions())],
         ])['dimension'];
         [$from, $to] = $this->stats->range($request->query('from'), $request->query('to'), null, $site->timezone);
         $limit = min((int) $request->query('limit', 20), 100);
@@ -69,14 +70,14 @@ class StatsController extends Controller
         $this->authorizeSite($request, $site);
         [$from, $to] = $this->stats->range($request->query('from'), $request->query('to'), null, $site->timezone);
 
-        return response()->json($this->stats->retention($site, $from, $to));
+        return response()->json($this->tier2->retention($site, $from, $to));
     }
 
     public function cohorts(Request $request, Site $site): JsonResponse
     {
         $this->authorizeSite($request, $site);
 
-        return response()->json(['cohorts' => $this->stats->cohorts($site)]);
+        return response()->json(['cohorts' => $this->tier2->cohorts($site)]);
     }
 
     public function loyalty(Request $request, Site $site): JsonResponse
@@ -84,7 +85,7 @@ class StatsController extends Controller
         $this->authorizeSite($request, $site);
         [$from, $to] = $this->stats->range($request->query('from'), $request->query('to'), null, $site->timezone);
 
-        return response()->json($this->stats->loyalty($site, $from, $to));
+        return response()->json($this->tier2->loyalty($site, $from, $to));
     }
 
     public function attribution(Request $request, Site $site): JsonResponse
@@ -92,7 +93,7 @@ class StatsController extends Controller
         $this->authorizeSite($request, $site);
         [$from, $to] = $this->stats->range($request->query('from'), $request->query('to'), null, $site->timezone);
 
-        return response()->json($this->stats->attribution($site, $from, $to));
+        return response()->json($this->tier2->attribution($site, $from, $to));
     }
 
     public function timeToConvert(Request $request, Site $site): JsonResponse
@@ -100,7 +101,7 @@ class StatsController extends Controller
         $this->authorizeSite($request, $site);
         [$from, $to] = $this->stats->range($request->query('from'), $request->query('to'), null, $site->timezone);
 
-        return response()->json($this->stats->timeToConvert($site, $from, $to));
+        return response()->json($this->tier2->timeToConvert($site, $from, $to));
     }
 
     /** Real targets for goal/funnel builders: the site's actual pages and custom events. */

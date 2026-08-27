@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\Site;
+use App\Services\SqlDialect;
 use App\Services\Stats;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
@@ -36,7 +37,7 @@ class Rollup extends Command
 
     private function rollupPeriod(int $siteId, string $table, string $periodCol, string $grain, int $offset, $from): void
     {
-        $periodExpr = Stats::periodExpr('created_at', $grain, $offset);
+        $periodExpr = SqlDialect::periodExpr('created_at', $grain, $offset);
 
         // The period column stores site-local labels; the delete boundary must be
         // the site-local label of $from. Daily rows store a date string — comparing
@@ -69,7 +70,7 @@ class Rollup extends Command
             }
 
             // outbound / download / not_found — value comes from event props (url) or path
-            $jsonUrl = Stats::jsonUrlExpr();
+            $jsonUrl = SqlDialect::jsonUrl();
             foreach (Stats::EVENT_DIMENSIONS as $dimension => $event) {
                 $valueExpr = $dimension === 'not_found' ? "COALESCE(path, '')" : "COALESCE($jsonUrl, '')";
                 DB::insert(

@@ -16,6 +16,7 @@ import TimeToConvertCard from '../components/TimeToConvertCard.vue'
 import SharePanel from '../components/SharePanel.vue'
 import { theme } from '../lib/theme'
 import { usePersistedRef, safeJson } from '../lib/persist'
+import { useDateRange, todayIso, RANGES, RANGE_PRESETS } from '../lib/useDateRange'
 import SettingsPanel from '../components/SettingsPanel.vue'
 import AccountPanel from '../components/AccountPanel.vue'
 import SetupWizard from '../components/SetupWizard.vue'
@@ -41,88 +42,23 @@ const breakdowns = ref<Record<string, BreakdownRow[]>>({})
 const live = ref<number | null>(null)
 const livePages = ref<BreakdownRow[]>([])
 const metric = ref<'visitors' | 'pageviews'>('visitors')
-const rangeDays = usePersistedRef('melytics_range', (raw) => {
-  const n = Number(raw)
-  return [1, 7, 30, 90].includes(n) ? n : 30
-})
 const filter = ref<{ dim: string; value: string } | null>(null)
 const loading = ref(true)
 
-const RANGES = [
-  { label: 'Today', days: 1 },
-  { label: '7d', days: 7 },
-  { label: '30d', days: 30 },
-  { label: '90d', days: 90 },
-]
+const {
+  rangeDays,
+  customRange,
+  pickingRange,
+  pickFrom,
+  pickTo,
+  openRangePicker,
+  applyPresetChip,
+  applyCustomRange,
+  setPresetRange,
+  customLabel,
+  rangeParams,
+} = useDateRange()
 
-// Custom date range: when set, it wins over the preset days. A stored preset
-// key ('ytd', 'month', …) is recomputed live so open-ended ranges roll forward
-// daily; explicit from/to dates stay fixed.
-type CustomRange = { from: string; to: string } | { preset: string }
-const customRange = usePersistedRef<CustomRange | null>(
-  'melytics_custom_range',
-  (raw) => {
-    const v = safeJson(raw) as any
-    return (v?.from && v?.to) || v?.preset ? v : null
-  },
-  true
-)
-const pickingRange = ref(false)
-const pickFrom = ref('')
-const pickTo = ref('')
-const pickedPreset = ref<string | null>(null)
-const isoDate = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-const todayIso = () => isoDate(new Date())
-
-const RANGE_PRESETS: { key: string; label: string; range: () => [Date, Date] }[] = [
-  { key: 'month', label: 'This month', range: () => [new Date(new Date().getFullYear(), new Date().getMonth(), 1), new Date()] },
-  { key: 'last-month', label: 'Last month', range: () => [new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1), new Date(new Date().getFullYear(), new Date().getMonth(), 0)] },
-  { key: 'ytd', label: 'Year to date', range: () => [new Date(new Date().getFullYear(), 0, 1), new Date()] },
-  { key: '12mo', label: 'Last 12 months', range: () => [new Date(new Date().getFullYear() - 1, new Date().getMonth(), new Date().getDate()), new Date()] },
-]
-const presetDates = (key: string): { from: string; to: string } | null => {
-  const p = RANGE_PRESETS.find((x) => x.key === key)
-  if (!p) return null
-  const [f, t] = p.range()
-  return { from: isoDate(f), to: isoDate(t) }
-}
-/** The resolved from/to for the active custom range, live for presets. */
-const resolvedCustom = computed(() => {
-  if (!customRange.value) return null
-  return 'preset' in customRange.value ? presetDates(customRange.value.preset) : customRange.value
-})
-
-function openRangePicker() {
-  const r = resolvedCustom.value
-  pickFrom.value = r?.from ?? todayIso()
-  pickTo.value = r?.to ?? todayIso()
-  pickedPreset.value = customRange.value && 'preset' in customRange.value ? customRange.value.preset : null
-  pickingRange.value = true
-}
-function applyPresetChip(p: (typeof RANGE_PRESETS)[number]) {
-  const d = presetDates(p.key)!
-  pickFrom.value = d.from
-  pickTo.value = d.to
-  pickedPreset.value = p.key
-}
-function applyCustomRange() {
-  if (!pickFrom.value || !pickTo.value) return
-  // Fields untouched since the chip → store the preset itself, so it stays live
-  const pd = pickedPreset.value ? presetDates(pickedPreset.value) : null
-  const [from, to] = pickFrom.value <= pickTo.value ? [pickFrom.value, pickTo.value] : [pickTo.value, pickFrom.value]
-  customRange.value = pd && pd.from === from && pd.to === to ? { preset: pickedPreset.value! } : { from, to }
-  pickingRange.value = false
-}
-function setPresetRange(days: number) {
-  customRange.value = null
-  rangeDays.value = days
-}
-const customLabel = computed(() => {
-  if (!customRange.value) return 'Custom'
-  if ('preset' in customRange.value) return RANGE_PRESETS.find((p) => p.key === (customRange.value as { preset: string }).preset)?.label ?? 'Custom'
-  const f = (s: string) => new Date(s + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-  return `${f(customRange.value.from)} – ${f(customRange.value.to)}`
-})
 // inert panels are observation-only: their dimensions can't cross-filter
 const PANELS: { key: string; title: string; inert?: boolean }[] = [
   { key: 'page', title: 'Pages' },
@@ -240,14 +176,6 @@ const delta = computed(() => {
   return Math.round(((cur - prev) / prev) * 100)
 })
 
-function rangeParams() {
-  if (resolvedCustom.value) return `from=${resolvedCustom.value.from}&to=${resolvedCustom.value.to}`
-  const to = new Date()
-  const from = new Date(Date.now() - (rangeDays.value - 1) * 86400_000)
-  // isoDate is the local calendar date, not toISOString (which is UTC and flips the day in the evening)
-  return `from=${isoDate(from)}&to=${isoDate(to)}`
-}
-
 const filterQS = () =>
   filter.value ? `&filter=${encodeURIComponent(`${filter.value.dim}:${filter.value.value}`)}` : ''
 
@@ -270,32 +198,38 @@ async function load() {
   const id = siteId.value
   // hidden modules are not fetched at all (funnels especially are heavier queries)
   const activePanels = PANELS.filter((p) => show(p.key))
-  const [s, a, g, f, v, rt, co, lo, at, tc, ...panels] = await Promise.all([
-    api<Stats>(`/sites/${id}/stats?${rangeParams()}${filterQS()}`),
-    api<{ annotations: Annotation[] }>(`/sites/${id}/annotations?${rangeParams()}`),
-    show('goals') ? api<{ goals: GoalRow[] }>(`/sites/${id}/goals?${rangeParams()}`) : null,
-    show('funnels') ? api<{ funnels: FunnelRow[] }>(`/sites/${id}/funnels?${rangeParams()}`) : null,
-    show('vitals') ? api<Vitals>(`/sites/${id}/vitals?${rangeParams()}`) : null,
-    visible('retention') ? api<Retention>(`/sites/${id}/retention?${rangeParams()}`) : null,
-    visible('cohorts') ? api<{ cohorts: CohortRow[] }>(`/sites/${id}/cohorts`) : null,
-    visible('loyalty') ? api<Loyalty>(`/sites/${id}/loyalty?${rangeParams()}`) : null,
-    visible('attribution') ? api<Attribution>(`/sites/${id}/attribution?${rangeParams()}`) : null,
-    visible('ttc') ? api<TimeToConvert>(`/sites/${id}/time-to-convert?${rangeParams()}`) : null,
-    ...activePanels.map((p) =>
-      api<{ rows: BreakdownRow[] }>(`/sites/${id}/breakdown?dimension=${p.key}&${rangeParams()}&limit=8${filterQS()}`)
+  // keyed requests, not a positional destructure — inserting one can't shift the rest
+  const req = {
+    stats: api<Stats>(`/sites/${id}/stats?${rangeParams()}${filterQS()}`),
+    annotations: api<{ annotations: Annotation[] }>(`/sites/${id}/annotations?${rangeParams()}`),
+    goals: show('goals') ? api<{ goals: GoalRow[] }>(`/sites/${id}/goals?${rangeParams()}`) : null,
+    funnels: show('funnels') ? api<{ funnels: FunnelRow[] }>(`/sites/${id}/funnels?${rangeParams()}`) : null,
+    vitals: show('vitals') ? api<Vitals>(`/sites/${id}/vitals?${rangeParams()}`) : null,
+    retention: visible('retention') ? api<Retention>(`/sites/${id}/retention?${rangeParams()}`) : null,
+    cohorts: visible('cohorts') ? api<{ cohorts: CohortRow[] }>(`/sites/${id}/cohorts`) : null,
+    loyalty: visible('loyalty') ? api<Loyalty>(`/sites/${id}/loyalty?${rangeParams()}`) : null,
+    attribution: visible('attribution') ? api<Attribution>(`/sites/${id}/attribution?${rangeParams()}`) : null,
+    ttc: visible('ttc') ? api<TimeToConvert>(`/sites/${id}/time-to-convert?${rangeParams()}`) : null,
+    panels: Promise.all(
+      activePanels.map((p) =>
+        api<{ rows: BreakdownRow[] }>(`/sites/${id}/breakdown?dimension=${p.key}&${rangeParams()}&limit=8${filterQS()}`)
+      )
     ),
-  ])
-  stats.value = s as Stats
-  annotations.value = (a as { annotations: Annotation[] }).annotations
-  goals.value = g ? (g as { goals: GoalRow[] }).goals : []
-  funnels.value = f ? (f as { funnels: FunnelRow[] }).funnels : []
-  vitals.value = v ? (v as Vitals) : null
-  retention.value = rt ? (rt as Retention) : null
-  cohorts.value = co ? (co as { cohorts: CohortRow[] }).cohorts : null
-  loyalty.value = lo ? (lo as Loyalty) : null
-  attribution.value = at ? (at as Attribution) : null
-  ttc.value = tc ? (tc as TimeToConvert) : null
-  breakdowns.value = Object.fromEntries(activePanels.map((p, i) => [p.key, panels[i].rows]))
+  }
+  const r = Object.fromEntries(
+    await Promise.all(Object.entries(req).map(async ([k, p]) => [k, await p]))
+  ) as { [K in keyof typeof req]: Awaited<(typeof req)[K]> }
+  stats.value = r.stats
+  annotations.value = r.annotations.annotations
+  goals.value = r.goals?.goals ?? []
+  funnels.value = r.funnels?.funnels ?? []
+  vitals.value = r.vitals
+  retention.value = r.retention
+  cohorts.value = r.cohorts?.cohorts ?? null
+  loyalty.value = r.loyalty
+  attribution.value = r.attribution
+  ttc.value = r.ttc
+  breakdowns.value = Object.fromEntries(activePanels.map((p, i) => [p.key, r.panels[i].rows]))
   loading.value = false
 }
 

@@ -23,28 +23,10 @@ class Stats
         'event' => 'event',
     ];
 
-    /** Referrer-host needles per channel; AI before Search so gemini.google.com lands in AI. */
-    private const CHANNEL_HOSTS = [
-        'AI' => ['chatgpt.com', 'chat.openai.com', 'perplexity.ai', 'claude.ai', 'gemini.google.com', 'copilot.microsoft.com', 'you.com', 'phind.com', 'poe.com'],
-        'Search' => ['google.', 'bing.com', 'duckduckgo.com', 'search.yahoo.com', 'ecosia.org', 'search.brave.com', 'startpage.com', 'baidu.com', 'yandex.'],
-        'Social' => ['twitter.com', 'x.com', 't.co', 'facebook.com', 'fb.com', 'instagram.com', 'linkedin.com', 'reddit.com', 'news.ycombinator.com', 'lobste.rs', 'threads.net', 'bsky.app', 'mastodon', 'tiktok.com', 'youtube.com', 'pinterest.'],
-        'Email' => ['mail.google.com', 'outlook.live.com', 'mail.yahoo.com', 'mail.proton.me'],
-    ];
-
-    public static function channel(?string $host): string
+    /** Every dimension the breakdown endpoint accepts. */
+    public static function breakdownDimensions(): array
     {
-        if (! $host) {
-            return 'Direct';
-        }
-        foreach (self::CHANNEL_HOSTS as $channel => $needles) {
-            foreach ($needles as $needle) {
-                if (str_contains($host, $needle)) {
-                    return $channel;
-                }
-            }
-        }
-
-        return 'Referral';
+        return [...array_keys(self::FILTERABLE), 'entry_page', 'exit_page', ...array_keys(self::EVENT_DIMENSIONS), 'channel'];
     }
 
     /** Breakdown dimensions derived from internal events rather than hit columns. */
@@ -63,7 +45,7 @@ class Stats
      */
     public static function sessionSql(?string $filterDimension = null): string
     {
-        $epoch = self::epochExpr(...);
+        $epoch = SqlDialect::epoch(...);
         $filter = $filterDimension ? ' AND '.self::FILTERABLE[$filterDimension].' = :fval' : '';
 
         return "WITH mh AS (
@@ -123,7 +105,7 @@ class Stats
                 return $this->filteredSessionBreakdown($site->id, $dimension, $from, $to, $limit, $filter);
             }
             if (isset(self::EVENT_DIMENSIONS[$dimension])) {
-                $col = $dimension === 'not_found' ? 'path' : $this->jsonUrlExpr();
+                $col = $dimension === 'not_found' ? 'path' : SqlDialect::jsonUrl();
                 return $this->filteredHits($site->id, $from, $to, $filter)
                     ->where('event', self::EVENT_DIMENSIONS[$dimension])
                     ->groupByRaw($col)
@@ -185,7 +167,7 @@ class Stats
 
         $out = [];
         foreach ($rows as $r) {
-            $c = self::channel($r->value ?: null);
+            $c = ChannelClassifier::classify($r->value ?: null);
             $out[$c] = [
                 'value' => $c,
                 'pageviews' => ($out[$c]['pageviews'] ?? 0) + $r->pageviews,
@@ -194,22 +176,6 @@ class Stats
         }
 
         return collect(array_values($out))->sortByDesc('pageviews')->values();
-    }
-
-    /** JSON url extractor for __outbound / __download event props, per driver. */
-    public static function jsonUrlExpr(): string
-    {
-        return DB::connection()->getDriverName() === 'mysql'
-            ? "JSON_UNQUOTE(JSON_EXTRACT(event_props, '$.url'))"
-            : "json_extract(event_props, '$.url')";
-    }
-
-    /** Unix-epoch expression for a datetime column, per driver. */
-    private static function epochExpr(string $column): string
-    {
-        return DB::connection()->getDriverName() === 'mysql'
-            ? "UNIX_TIMESTAMP($column)"
-            : "CAST(strftime('%s', $column) AS INTEGER)";
     }
 
     /** Entry/exit pages under a cross-filter: sessions rebuilt from raw hits. */
@@ -234,7 +200,7 @@ class Stats
     }
 
     /** Range bounds as UTC instants — hits.created_at is stored in UTC. */
-    private static function utcBounds(Carbon $from, Carbon $to): array
+    public static function utcBounds(Carbon $from, Carbon $to): array
     {
         return [$from->copy()->utc(), $to->copy()->endOfDay()->utc()];
     }
@@ -377,281 +343,11 @@ class Stats
         ];
     }
 
-    /**
-     * Tier-2 retention: consented visitors in range, split new vs returning.
-     * Returning = visitor_id also seen before the range start.
-     *
-     * @return array{identified: int, new: int, returning: int}
-     */
-    public function retention(Site $site, Carbon $from, Carbon $to): array
-    {
-        $ids = DB::table('hits')
-            ->where('site_id', $site->id)
-            ->whereBetween('created_at', self::utcBounds($from, $to))
-            ->whereNotNull('visitor_id')
-            ->distinct()
-            ->pluck('visitor_id');
-
-        $returning = $ids->isEmpty() ? 0 : DB::table('hits')
-            ->where('site_id', $site->id)
-            ->where('created_at', '<', $from->copy()->utc())
-            ->whereIn('visitor_id', $ids)
-            ->distinct()
-            ->count('visitor_id');
-
-        return [
-            'identified' => $ids->count(),
-            'new' => $ids->count() - $returning,
-            'returning' => $returning,
-        ];
-    }
-
-    /**
-     * Tier-2 weekly cohorts: consented visitors grouped by first-seen week
-     * (site-local, Monday-based), with distinct visitors active 1..n weeks later.
-     *
-     * @return array<int, array{week: string, size: int, active: array<int, int>}>
-     */
-    public function cohorts(Site $site, int $weeks = 8): array
-    {
-        $off = self::tzOffset($site->timezone);
-        $driver = DB::connection()->getDriverName();
-        // Week index since Monday 2024-01-01, in site-local time
-        $wk = $driver === 'mysql'
-            ? "FLOOR(DATEDIFF(DATE_ADD(created_at, INTERVAL $off MINUTE), '2024-01-01') / 7)"
-            : "CAST((julianday(date(datetime(created_at, '$off minutes'))) - julianday('2024-01-01')) / 7 AS INTEGER)";
-
-        $rows = DB::select(
-            "SELECT visitor_id, $wk AS wk FROM hits
-             WHERE site_id = ? AND visitor_id IS NOT NULL
-             GROUP BY visitor_id, wk",
-            [$site->id]
-        );
-
-        $first = [];
-        $active = [];
-        foreach ($rows as $r) {
-            $first[$r->visitor_id] = min($first[$r->visitor_id] ?? PHP_INT_MAX, (int) $r->wk);
-            $active[$r->visitor_id][] = (int) $r->wk;
-        }
-
-        $nowWk = intdiv((int) Carbon::parse('2024-01-01')->diffInDays(now($site->timezone)), 7);
-        $startWk = $nowWk - $weeks + 1;
-
-        $cohorts = [];
-        for ($w = $startWk; $w <= $nowWk; $w++) {
-            $cohorts[$w] = [
-                'week' => Carbon::parse('2024-01-01')->addWeeks($w)->toDateString(),
-                'size' => 0,
-                'active' => array_fill(0, $nowWk - $w + 1, 0),
-            ];
-        }
-        foreach ($first as $id => $w) {
-            if ($w < $startWk) {
-                continue;
-            }
-            $cohorts[$w]['size']++;
-            foreach (array_unique($active[$id]) as $aw) {
-                $cohorts[$w]['active'][$aw - $w]++;
-            }
-        }
-
-        return array_values($cohorts);
-    }
-
-    /**
-     * Tier-2 loyalty: visits (30-min-gap sessions) per consented visitor in range,
-     * bucketed into a frequency distribution.
-     *
-     * @return array{identified: int, avg: float, buckets: array<int, array{label: string, visitors: int}>}
-     */
-    public function loyalty(Site $site, Carbon $from, Carbon $to): array
-    {
-        [$f, $t] = self::utcBounds($from, $to);
-        $epoch = self::epochExpr(...);
-
-        $rows = DB::select(
-            "WITH v AS (
-                SELECT visitor_id,
-                       CASE WHEN LAG(created_at) OVER w IS NULL
-                            OR {$epoch('created_at')} - {$epoch('LAG(created_at) OVER w')} > 1800
-                            THEN 1 ELSE 0 END AS s0
-                FROM hits
-                WHERE site_id = ? AND visitor_id IS NOT NULL AND created_at BETWEEN ? AND ?
-                WINDOW w AS (PARTITION BY visitor_id ORDER BY created_at)
-            ) SELECT SUM(s0) AS visits FROM v GROUP BY visitor_id",
-            [$site->id, $f, $t]
-        );
-
-        $buckets = [
-            ['label' => '1 visit', 'min' => 1, 'max' => 1, 'visitors' => 0],
-            ['label' => '2', 'min' => 2, 'max' => 2, 'visitors' => 0],
-            ['label' => '3–5', 'min' => 3, 'max' => 5, 'visitors' => 0],
-            ['label' => '6–10', 'min' => 6, 'max' => 10, 'visitors' => 0],
-            ['label' => '11+', 'min' => 11, 'max' => PHP_INT_MAX, 'visitors' => 0],
-        ];
-        $total = 0;
-        foreach ($rows as $r) {
-            $v = (int) $r->visits;
-            $total += $v;
-            foreach ($buckets as &$b) {
-                if ($v >= $b['min'] && $v <= $b['max']) {
-                    $b['visitors']++;
-                    break;
-                }
-            }
-            unset($b);
-        }
-
-        return [
-            'identified' => count($rows),
-            'avg' => count($rows) ? round($total / count($rows), 1) : 0.0,
-            'buckets' => array_map(fn ($b) => ['label' => $b['label'], 'visitors' => $b['visitors']], $buckets),
-        ];
-    }
-
-    /**
-     * Consented visitors whose first hit matching any goal falls inside the range.
-     *
-     * @return array<string, string> visitor_id => first conversion time (UTC)
-     */
-    private function convertingVisitors(Site $site, Carbon $from, Carbon $to): array
-    {
-        $goals = $site->goals;
-        if ($goals->isEmpty()) {
-            return [];
-        }
-
-        $rows = DB::table('hits')
-            ->where('site_id', $site->id)
-            ->whereNotNull('visitor_id')
-            ->where(function ($q) use ($goals) {
-                foreach ($goals as $g) {
-                    $q->orWhere(function ($w) use ($g) {
-                        if ($g->event) {
-                            $w->where('event', $g->event);
-                        } else {
-                            $w->whereNull('event');
-                            self::pathMatch($w, $g->path_pattern);
-                        }
-                    });
-                }
-            })
-            ->groupBy('visitor_id')
-            ->selectRaw('visitor_id, MIN(created_at) as first_conv')
-            ->get();
-
-        [$f, $t] = self::utcBounds($from, $to);
-
-        return $rows
-            ->filter(fn ($r) => $r->first_conv >= $f->toDateTimeString() && $r->first_conv <= $t->toDateTimeString())
-            ->pluck('first_conv', 'visitor_id')
-            ->all();
-    }
-
-    /**
-     * Tier-2 first-touch attribution: converting consented visitors credited to
-     * the channel of their first-ever visit (not the converting session).
-     *
-     * @return array{identified: int, channels: array<int, array{channel: string, visitors: int}>}
-     */
-    public function attribution(Site $site, Carbon $from, Carbon $to): array
-    {
-        $conv = $this->convertingVisitors($site, $from, $to);
-        if (! $conv) {
-            return ['identified' => 0, 'channels' => []];
-        }
-
-        // SQLite: bare columns follow the MIN(id) row (same trick as live())
-        $firsts = DB::table('hits')
-            ->where('site_id', $site->id)
-            ->whereIn('visitor_id', array_keys($conv))
-            ->groupBy('visitor_id')
-            ->selectRaw('visitor_id, referrer_host, MIN(id)')
-            ->get();
-
-        $out = [];
-        foreach ($firsts as $r) {
-            $c = self::channel($r->referrer_host ?: null);
-            $out[$c] = ($out[$c] ?? 0) + 1;
-        }
-        arsort($out);
-
-        return [
-            'identified' => count($conv),
-            'channels' => array_map(fn ($c, $n) => ['channel' => $c, 'visitors' => $n], array_keys($out), $out),
-        ];
-    }
-
-    /**
-     * Tier-2 time to conversion: days and sessions between a consented visitor's
-     * first-ever visit and their first goal hit.
-     *
-     * @return array{identified: int, median_days: float, median_sessions: float, buckets: array<int, array{label: string, visitors: int}>}
-     */
-    public function timeToConvert(Site $site, Carbon $from, Carbon $to): array
-    {
-        $buckets = [
-            ['label' => 'Same day', 'max' => 1, 'visitors' => 0],
-            ['label' => '1–7d', 'max' => 7, 'visitors' => 0],
-            ['label' => '8–30d', 'max' => 30, 'visitors' => 0],
-            ['label' => '30d+', 'max' => PHP_FLOAT_MAX, 'visitors' => 0],
-        ];
-        $conv = $this->convertingVisitors($site, $from, $to);
-        if (! $conv) {
-            return ['identified' => 0, 'median_days' => 0.0, 'median_sessions' => 0.0,
-                'buckets' => array_map(fn ($b) => ['label' => $b['label'], 'visitors' => 0], $buckets)];
-        }
-
-        $hits = DB::table('hits')
-            ->where('site_id', $site->id)
-            ->whereIn('visitor_id', array_keys($conv))
-            ->orderBy('created_at')
-            ->get(['visitor_id', 'created_at'])
-            ->groupBy('visitor_id');
-
-        $days = [];
-        $sessions = [];
-        foreach ($conv as $id => $firstConv) {
-            $ts = $hits[$id]->pluck('created_at')->filter(fn ($t) => $t <= $firstConv)->values();
-            $days[] = (strtotime($firstConv) - strtotime($ts[0])) / 86400;
-            $n = 1;
-            for ($i = 1; $i < count($ts); $i++) {
-                if (strtotime($ts[$i]) - strtotime($ts[$i - 1]) > 1800) {
-                    $n++;
-                }
-            }
-            $sessions[] = $n;
-        }
-        foreach ($days as $d) {
-            foreach ($buckets as &$b) {
-                if ($d < $b['max']) {
-                    $b['visitors']++;
-                    break;
-                }
-            }
-            unset($b);
-        }
-
-        $median = function (array $vals): float {
-            sort($vals);
-            $n = count($vals);
-            return $n % 2 ? $vals[intdiv($n, 2)] : ($vals[$n / 2 - 1] + $vals[$n / 2]) / 2;
-        };
-
-        return [
-            'identified' => count($conv),
-            'median_days' => round($median($days), 1),
-            'median_sessions' => round($median($sessions), 1),
-            'buckets' => array_map(fn ($b) => ['label' => $b['label'], 'visitors' => $b['visitors']], $buckets),
-        ];
-    }
-
     /** @param array{dimension: string, value: string}|null $filter */
     public function series(int $siteId, Carbon $from, Carbon $to, string $interval, ?array $filter = null, int $offsetMin = 0)
     {
         if ($filter) {
-            $expr = self::periodExpr('created_at', $interval, $offsetMin);
+            $expr = SqlDialect::periodExpr('created_at', $interval, $offsetMin);
 
             $q = $this->filteredHits($siteId, $from, $to, $filter);
             if ($filter['dimension'] !== 'event') {
@@ -790,19 +486,5 @@ class Stats
     public static function tzOffset(string $tz): int
     {
         return now($tz)->utcOffset();
-    }
-
-    /** Period expression bucketing a UTC datetime column into site-local time. */
-    public static function periodExpr(string $column, string $grain, int $offsetMin): string
-    {
-        $driver = DB::connection()->getDriverName();
-        $shifted = $offsetMin === 0 ? $column
-            : ($driver === 'mysql'
-                ? "DATE_ADD($column, INTERVAL $offsetMin MINUTE)"
-                : "datetime($column, '$offsetMin minutes')");
-
-        return $grain === 'hour'
-            ? ($driver === 'mysql' ? "DATE_FORMAT($shifted, '%Y-%m-%d %H:00:00')" : "strftime('%Y-%m-%d %H:00:00', $shifted)")
-            : ($driver === 'mysql' ? "DATE($shifted)" : "date($shifted)");
     }
 }

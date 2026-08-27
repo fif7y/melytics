@@ -5,10 +5,10 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
 
-const BASE = (process.env.MELYTICS_URL ?? 'https://stats.fif7y.com/api').replace(/\/$/, '')
+const BASE = process.env.MELYTICS_URL?.replace(/\/$/, '')
 const TOKEN = process.env.MELYTICS_TOKEN
-if (!TOKEN) {
-  console.error('MELYTICS_TOKEN env var is required (get one by logging into the dashboard API: POST /auth/login)')
+if (!BASE || !TOKEN) {
+  console.error('MELYTICS_URL (e.g. https://stats.example.com/api) and MELYTICS_TOKEN env vars are required (get a token by logging into the dashboard API: POST /auth/login)')
   process.exit(1)
 }
 

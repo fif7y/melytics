@@ -48,8 +48,9 @@ class PublicShareController extends Controller
     public function breakdown(Request $request, string $token): JsonResponse
     {
         $link = $this->authorize($request, $token);
+        // public shares expose only the column-backed dimensions, not session/event ones
         $dimension = $request->validate([
-            'dimension' => 'required|in:page,referrer,country,device,browser,os,utm_source,utm_medium,utm_campaign,event',
+            'dimension' => ['required', \Illuminate\Validation\Rule::in(array_keys(Stats::FILTERABLE))],
         ])['dimension'];
         [$from, $to] = $this->stats->range($request->query('from'), $request->query('to'), null, $link->site->timezone);
 
