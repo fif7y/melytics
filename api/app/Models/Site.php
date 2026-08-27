@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -12,6 +13,14 @@ class Site extends Model
     protected $fillable = ['name', 'domain', 'timezone', 'retention_days', 'tier2_enabled', 'digest_enabled', 'alerts_enabled'];
 
     protected $casts = ['tier2_enabled' => 'bool'];
+
+    // Users paste full URLs into "domain" — keep only the lowercased host.
+    protected function domain(): Attribute
+    {
+        return Attribute::make(
+            set: fn (string $v) => strtolower(trim(explode('/', preg_replace('#^https?://#i', '', trim($v)))[0], './ ')),
+        );
+    }
 
     protected static function booted(): void
     {
