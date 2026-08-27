@@ -10,7 +10,10 @@ class Prune extends Command
 {
     protected $signature = 'melytics:prune';
 
-    protected $description = 'Delete raw hits older than each site\'s retention window (rollups are kept forever)';
+    protected $description = 'Delete raw hits older than each site\'s retention window (daily rollups are kept forever)';
+
+    /** Hourly rollups only serve ranges ≤2 days; beyond this they are never read. */
+    private const HOURLY_KEEP_DAYS = 14;
 
     public function handle(): int
     {
@@ -22,6 +25,14 @@ class Prune extends Command
             if ($deleted) {
                 $this->info("{$site->domain}: pruned $deleted hits");
             }
+        }
+
+        // ts holds site-local labels; the 14-day margin dwarfs any tz offset
+        $hourly = DB::table('rollup_hourly')
+            ->where('ts', '<', now()->subDays(self::HOURLY_KEEP_DAYS)->toDateTimeString())
+            ->delete();
+        if ($hourly) {
+            $this->info("pruned $hourly hourly rollup rows");
         }
 
         return self::SUCCESS;
