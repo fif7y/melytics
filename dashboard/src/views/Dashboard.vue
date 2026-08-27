@@ -15,6 +15,7 @@ import AttributionCard from '../components/AttributionCard.vue'
 import TimeToConvertCard from '../components/TimeToConvertCard.vue'
 import SharePanel from '../components/SharePanel.vue'
 import { theme } from '../lib/theme'
+import { usePersistedRef, safeJson } from '../lib/persist'
 import SettingsPanel from '../components/SettingsPanel.vue'
 import AccountPanel from '../components/AccountPanel.vue'
 import SetupWizard from '../components/SetupWizard.vue'
@@ -40,17 +41,9 @@ const breakdowns = ref<Record<string, BreakdownRow[]>>({})
 const live = ref<number | null>(null)
 const livePages = ref<BreakdownRow[]>([])
 const metric = ref<'visitors' | 'pageviews'>('visitors')
-const RANGE_KEY = 'melytics_range'
-const rangeDays = ref(
-  (() => {
-    const n = Number(localStorage.getItem(RANGE_KEY))
-    return [1, 7, 30, 90].includes(n) ? n : 30
-  })()
-)
-watch(rangeDays, (d) => {
-  try {
-    localStorage.setItem(RANGE_KEY, String(d))
-  } catch {}
+const rangeDays = usePersistedRef('melytics_range', (raw) => {
+  const n = Number(raw)
+  return [1, 7, 30, 90].includes(n) ? n : 30
 })
 const filter = ref<{ dim: string; value: string } | null>(null)
 const loading = ref(true)
@@ -65,17 +58,14 @@ const RANGES = [
 // Custom date range: when set, it wins over the preset days. A stored preset
 // key ('ytd', 'month', …) is recomputed live so open-ended ranges roll forward
 // daily; explicit from/to dates stay fixed.
-const CUSTOM_KEY = 'melytics_custom_range'
 type CustomRange = { from: string; to: string } | { preset: string }
-const customRange = ref<CustomRange | null>(
-  (() => {
-    try {
-      const v = JSON.parse(localStorage.getItem(CUSTOM_KEY) ?? 'null')
-      return (v?.from && v?.to) || v?.preset ? v : null
-    } catch {
-      return null
-    }
-  })()
+const customRange = usePersistedRef<CustomRange | null>(
+  'melytics_custom_range',
+  (raw) => {
+    const v = safeJson(raw) as any
+    return (v?.from && v?.to) || v?.preset ? v : null
+  },
+  true
 )
 const pickingRange = ref(false)
 const pickFrom = ref('')
@@ -121,16 +111,10 @@ function applyCustomRange() {
   const pd = pickedPreset.value ? presetDates(pickedPreset.value) : null
   const [from, to] = pickFrom.value <= pickTo.value ? [pickFrom.value, pickTo.value] : [pickTo.value, pickFrom.value]
   customRange.value = pd && pd.from === from && pd.to === to ? { preset: pickedPreset.value! } : { from, to }
-  try {
-    localStorage.setItem(CUSTOM_KEY, JSON.stringify(customRange.value))
-  } catch {}
   pickingRange.value = false
 }
 function setPresetRange(days: number) {
   customRange.value = null
-  try {
-    localStorage.removeItem(CUSTOM_KEY)
-  } catch {}
   rangeDays.value = days
 }
 const customLabel = computed(() => {
@@ -171,54 +155,34 @@ const MODULES = [
   ...PANELS.map((p) => ({ key: p.key, label: p.title })),
 ]
 
-const hidden = ref<string[]>(
-  (() => {
-    try {
-      return JSON.parse(localStorage.getItem('melytics_hidden') ?? '[]')
-    } catch {
-      return []
-    }
-  })()
-)
+const hidden = usePersistedRef<string[]>('melytics_hidden', (raw) => (safeJson(raw) as string[]) ?? [], true)
 const show = (key: string) => !hidden.value.includes(key)
 // Tier-2 modules only render (and fetch) when the site has tier-2 tracking on
 const TIER2_KEYS = MODULES.filter((m) => 'tier2' in m && m.tier2).map((m) => m.key)
 const visible = (key: string) => show(key) && (!TIER2_KEYS.includes(key) || (site.value?.tier2_enabled ?? false))
 
 // Drag-to-reorder breakdown cards, persisted like the hide-toggles
-const ORDER_KEY = 'melytics_order'
-const order = ref<string[]>(
-  (() => {
-    try {
-      return JSON.parse(localStorage.getItem(ORDER_KEY) ?? '[]')
-    } catch {
-      return []
-    }
-  })()
-)
+const order = usePersistedRef<string[]>('melytics_order', (raw) => (safeJson(raw) as string[]) ?? [], true)
 // Vitals lives in the same reorderable grid as the breakdowns
 // Default grid order for fresh installs — the curated layout (saved 2026-08-26)
 const GRID_DEFAULT = ['page', 'live', 'country', 'referrer', 'device', 'browser', 'vitals', 'entry_page', 'exit_page', 'channel', 'not_found', 'outbound', 'download', 'utm_source', 'utm_medium', 'utm_campaign', 'event', 'loyalty', 'retention', 'attribution', 'ttc', 'cohorts']
 const SPECIAL_TITLES: Record<string, string> = { live: 'Live', vitals: 'Web Vitals', retention: 'Retention', cohorts: 'Cohorts', loyalty: 'Loyalty', attribution: 'Attribution', ttc: 'Time to convert' }
 const GRID_ITEMS = GRID_DEFAULT.map((k) => PANELS.find((p) => p.key === k) ?? { key: k, title: SPECIAL_TITLES[k] })
-const orderedPanels = computed(() => {
-  const idx = (k: string) => {
-    const i = order.value.indexOf(k)
-    return i === -1 ? 100 + GRID_ITEMS.findIndex((p) => p.key === k) : i
-  }
-  return GRID_ITEMS.filter((p) => visible(p.key)).slice().sort((a, b) => idx(a.key) - idx(b.key))
-})
+// Sort position of a grid card: its saved order, else after everything saved,
+// in default-grid order. Shared by both drag surfaces and the settings list.
+const gridIdx = (k: string) => {
+  const i = order.value.indexOf(k)
+  return i === -1 ? 100 + GRID_ITEMS.findIndex((p) => p.key === k) : i
+}
+const orderedPanels = computed(() =>
+  GRID_ITEMS.filter((p) => visible(p.key)).slice().sort((a, b) => gridIdx(a.key) - gridIdx(b.key))
+)
 const dragKey = ref<string | null>(null)
 const overKey = ref<string | null>(null)
 
 // Settings lists modules in on-screen order: goals/funnels row first, then the grid's order
 const orderedModules = computed(() => {
-  const idx = (k: string) => {
-    if (k === 'goals') return -2
-    if (k === 'funnels') return -1
-    const i = order.value.indexOf(k)
-    return i === -1 ? 100 + GRID_ITEMS.findIndex((p) => p.key === k) : i
-  }
+  const idx = (k: string) => (k === 'goals' ? -2 : k === 'funnels' ? -1 : gridIdx(k))
   return MODULES.slice().sort((a, b) => idx(a.key) - idx(b.key))
 })
 // Move one grid card before another in the persisted order. Operates on the
@@ -227,16 +191,9 @@ const orderedModules = computed(() => {
 function moveKey(from: string, to: string) {
   // goals/funnels live in a fixed row above the grid — not reorderable
   if (from === to || !GRID_ITEMS.some((p) => p.key === from) || !GRID_ITEMS.some((p) => p.key === to)) return
-  const idx = (k: string) => {
-    const i = order.value.indexOf(k)
-    return i === -1 ? 100 + GRID_ITEMS.findIndex((p) => p.key === k) : i
-  }
-  const keys = GRID_ITEMS.map((p) => p.key).sort((a, b) => idx(a) - idx(b))
+  const keys = GRID_ITEMS.map((p) => p.key).sort((a, b) => gridIdx(a) - gridIdx(b))
   keys.splice(keys.indexOf(to), 0, keys.splice(keys.indexOf(from), 1)[0])
   order.value = keys
-  try {
-    localStorage.setItem(ORDER_KEY, JSON.stringify(keys))
-  } catch {}
 }
 
 function dropOn(target: string) {
@@ -252,37 +209,23 @@ const CHART_STYLES = [
   { key: 'glow', label: 'Glow' },
 ] as const
 type ChartStyle = (typeof CHART_STYLES)[number]['key']
-const CHART_STYLE_KEY = 'melytics_chart_style'
-const chartStyle = ref<ChartStyle>(
-  (() => {
-    const v = localStorage.getItem(CHART_STYLE_KEY)
-    return CHART_STYLES.some((s) => s.key === v) ? (v as ChartStyle) : 'smooth'
-  })()
+const chartStyle = usePersistedRef<ChartStyle>('melytics_chart_style', (raw) =>
+  CHART_STYLES.some((s) => s.key === raw) ? (raw as ChartStyle) : 'smooth'
 )
 const chartStyleMenu = ref(false)
 function setChartStyle(k: ChartStyle) {
   chartStyle.value = k
   chartStyleMenu.value = false
-  try {
-    localStorage.setItem(CHART_STYLE_KEY, k)
-  } catch {}
 }
 
 // Density: compact tightens card padding and row spacing
-const DENSITY_KEY = 'melytics_density'
-const density = ref<'comfy' | 'compact'>(localStorage.getItem(DENSITY_KEY) === 'compact' ? 'compact' : 'comfy')
+const density = usePersistedRef<'comfy' | 'compact'>('melytics_density', (raw) => (raw === 'compact' ? 'compact' : 'comfy'))
 function setDensity(d: 'comfy' | 'compact') {
   density.value = d
-  try {
-    localStorage.setItem(DENSITY_KEY, d)
-  } catch {}
 }
 
 function toggleModule(key: string) {
   hidden.value = show(key) ? [...hidden.value, key] : hidden.value.filter((k) => k !== key)
-  try {
-    localStorage.setItem('melytics_hidden', JSON.stringify(hidden.value))
-  } catch {}
   load()
 }
 
@@ -301,10 +244,8 @@ function rangeParams() {
   if (resolvedCustom.value) return `from=${resolvedCustom.value.from}&to=${resolvedCustom.value.to}`
   const to = new Date()
   const from = new Date(Date.now() - (rangeDays.value - 1) * 86400_000)
-  // local calendar date, not toISOString (which is UTC and flips the day in the evening)
-  const iso = (d: Date) =>
-    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-  return `from=${iso(from)}&to=${iso(to)}`
+  // isoDate is the local calendar date, not toISOString (which is UTC and flips the day in the evening)
+  return `from=${isoDate(from)}&to=${isoDate(to)}`
 }
 
 const filterQS = () =>

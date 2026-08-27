@@ -13,20 +13,6 @@ class Rollup extends Command
 
     protected $description = 'Recompute hourly/daily rollups from raw hits (idempotent, cron-safe)';
 
-    private const DIMENSIONS = [
-        'total' => null,
-        'page' => 'path',
-        'referrer' => 'referrer_host',
-        'country' => 'country',
-        'device' => 'device',
-        'browser' => 'browser',
-        'os' => 'os',
-        'utm_source' => 'utm_source',
-        'utm_medium' => 'utm_medium',
-        'utm_campaign' => 'utm_campaign',
-        'event' => 'event',
-    ];
-
     public function handle(): int
     {
         $hours = (int) $this->option('hours');
@@ -64,7 +50,8 @@ class Rollup extends Command
                 ->where($periodCol, '>=', $periodFrom)
                 ->delete();
 
-            foreach (self::DIMENSIONS as $dimension => $column) {
+            // 'total' plus every filterable dimension — one registry, shared with Stats
+            foreach (['total' => null] + Stats::FILTERABLE as $dimension => $column) {
                 $valueExpr = $column === null ? "''" : "COALESCE($column, '')";
                 // internal events (__vitals, …) stay out of the event breakdown
                 $filter = $dimension === 'event' ? "AND event IS NOT NULL AND substr(event, 1, 2) != '__'" : '';
@@ -82,9 +69,7 @@ class Rollup extends Command
             }
 
             // outbound / download / not_found — value comes from event props (url) or path
-            $jsonUrl = DB::connection()->getDriverName() === 'mysql'
-                ? "JSON_UNQUOTE(JSON_EXTRACT(event_props, '$.url'))"
-                : "json_extract(event_props, '$.url')";
+            $jsonUrl = Stats::jsonUrlExpr();
             foreach (Stats::EVENT_DIMENSIONS as $dimension => $event) {
                 $valueExpr = $dimension === 'not_found' ? "COALESCE(path, '')" : "COALESCE($jsonUrl, '')";
                 DB::insert(

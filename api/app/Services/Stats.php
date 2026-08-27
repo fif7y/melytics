@@ -63,8 +63,7 @@ class Stats
      */
     public static function sessionSql(?string $filterDimension = null): string
     {
-        $driver = DB::connection()->getDriverName();
-        $epoch = fn (string $x) => $driver === 'mysql' ? "UNIX_TIMESTAMP($x)" : "CAST(strftime('%s', $x) AS INTEGER)";
+        $epoch = self::epochExpr(...);
         $filter = $filterDimension ? ' AND '.self::FILTERABLE[$filterDimension].' = :fval' : '';
 
         return "WITH mh AS (
@@ -198,11 +197,19 @@ class Stats
     }
 
     /** JSON url extractor for __outbound / __download event props, per driver. */
-    private function jsonUrlExpr(): string
+    public static function jsonUrlExpr(): string
     {
         return DB::connection()->getDriverName() === 'mysql'
             ? "JSON_UNQUOTE(JSON_EXTRACT(event_props, '$.url'))"
             : "json_extract(event_props, '$.url')";
+    }
+
+    /** Unix-epoch expression for a datetime column, per driver. */
+    private static function epochExpr(string $column): string
+    {
+        return DB::connection()->getDriverName() === 'mysql'
+            ? "UNIX_TIMESTAMP($column)"
+            : "CAST(strftime('%s', $column) AS INTEGER)";
     }
 
     /** Entry/exit pages under a cross-filter: sessions rebuilt from raw hits. */
@@ -461,8 +468,7 @@ class Stats
     public function loyalty(Site $site, Carbon $from, Carbon $to): array
     {
         [$f, $t] = self::utcBounds($from, $to);
-        $driver = DB::connection()->getDriverName();
-        $epoch = fn (string $x) => $driver === 'mysql' ? "UNIX_TIMESTAMP($x)" : "CAST(strftime('%s', $x) AS INTEGER)";
+        $epoch = self::epochExpr(...);
 
         $rows = DB::select(
             "WITH v AS (
