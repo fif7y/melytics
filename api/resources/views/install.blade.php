@@ -180,6 +180,11 @@
             <pre id="cron">cd {{ $basePath }} &amp;&amp; php artisan schedule:run >> /dev/null 2>&1</pre>
             <button type="button" class="copybtn" data-copy="cron">Copy</button>
           </div>
+          <p class="note">If the form has a PHP / Custom choice, pick <strong>Custom</strong> and paste the
+          whole line as the command. For the schedule, set <em>every</em> field — minute, hour, day,
+          month, weekday — to its “Every…” / <code>*</code> option: that means “run every minute”.
+          Some hosts take up to ~30&nbsp;minutes before a new cron job first fires; the dashboard’s
+          reminder banner disappears once it has.</p>
         </div>
 
         <div class="section" style="margin-top:2rem">Check it worked</div>

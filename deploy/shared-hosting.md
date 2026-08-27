@@ -23,6 +23,11 @@ a database (MySQL or SQLite), and cron. Examples below use `stats.example.com`.
    cron line to add in your panel (every minute):
    `cd ~/melytics && php artisan schedule:run >> /dev/null 2>&1`
 
+   In the panel's cron form: pick **Custom** (not PHP) if asked, paste the
+   whole line as the command, and set every schedule field — minute, hour,
+   day, month, weekday — to its "Every…" / `*` option (= run every minute).
+   Some hosts take up to ~30 min before a new job first fires.
+
    No cron yet? Stats still work — they refresh whenever the dashboard is
    opened — but the cron makes them continuous and powers digest/alert emails.
    The dashboard reminds you (with the exact line) until it's running.
