@@ -150,12 +150,20 @@ Grab the release zip (or build one with `bash deploy/build-release.sh`), then:
 1. **Give melytics a home.** A subdomain like `stats.your-domain.com` is the
    usual choice — create it in your hosting panel and note the folder it
    serves (e.g. `public_html/stats`). That folder is where everything goes.
-2. **Upload and extract the zip there.** The zip has no wrapper folder, so its
-   files belong directly in that folder (a bundled `.htaccess` handles the
-   rest — no docroot fiddling). If your file manager only extracts into a
-   *new* folder, use that: upload the zip one level up and extract into a
-   folder named exactly like the subdomain's — the extraction creates the
-   folder itself. Delete the zip when done.
+2. **Upload and extract the zip.** The zip has no wrapper folder — its files
+   belong directly in the subdomain's folder (a bundled `.htaccess` handles
+   the rest, no docroot fiddling). File managers extract in one of two ways,
+   so pick the path that matches yours:
+   - **It can extract in place** (into the current folder): upload the zip
+     *into* the subdomain folder and extract it right there.
+   - **It only extracts into a new named folder** (Hostinger and most panel
+     file managers): upload the zip **one level up** (e.g. `public_html/`),
+     delete the subdomain folder if the panel already created it, then
+     extract with the folder name set **exactly** to the subdomain's folder
+     name (e.g. `stats`) — the extraction creates the folder itself.
+
+   Either way, delete the zip when you're done. If you end up with the files
+   nested one folder too deep, move that folder's *contents* up and delete it.
 
    *Shortcut:* upload just the one-file `melytics-installer.php` instead and
    open it in the browser — it downloads and unpacks the release for you, no

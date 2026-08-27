@@ -8,11 +8,15 @@ a database (MySQL or SQLite), and cron. Examples below use `stats.example.com`.
 1. Build or download `melytics-<version>.zip` (`bash deploy/build-release.sh`).
    It bundles the API with production dependencies, the dashboard at
    `public/app/`, and the tracker at `public/m.js` — one docroot serves all three.
-2. Upload + extract via your panel's file manager — straight into the folder
-   your (sub)domain serves (e.g. `public_html/`) works: the zip has no wrapper
+2. Upload + extract via your panel's file manager. The zip has no wrapper
    folder, and a bundled root `.htaccess` routes everything through `public/`
-   and blocks access to the app internals. If your file manager insists on
-   extracting into a new folder, move that folder's contents up afterward. If you *can* point the document root at `…/melytics/public`
+   and blocks access to the app internals. If the file manager extracts in
+   place, upload the zip into the folder your (sub)domain serves and extract
+   there. If it only extracts into a new named folder (Hostinger et al.),
+   upload the zip one level up, delete the (sub)domain's folder if it already
+   exists, and extract using that folder's exact name — the extraction
+   creates the docroot itself. Delete the zip afterward; if files ended up
+   one folder too deep, move that folder's contents up. If you *can* point the document root at `…/melytics/public`
    instead, do — it's tidier.
 3. Visit the domain → the installer at `/install` checks requirements, creates
    your login and first site on SQLite, and shows the tracking snippet plus the
