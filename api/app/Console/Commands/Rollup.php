@@ -135,11 +135,14 @@ class Rollup extends Command
             $rows = DB::select(Stats::sessionSql()."
                 SELECT $pExpr AS p, $col AS v, COUNT(*) AS s, COUNT(DISTINCT visitor_hash) AS u
                 FROM sp WHERE first_pv >= :from GROUP BY $pExpr, $col", $bind);
-            DB::table($table)->insert(array_map(fn ($r) => [
+            // chunked: one giant insert trips SQLite's variable limit on long backfills
+            foreach (array_chunk(array_map(fn ($r) => [
                 'site_id' => $siteId, $periodCol => $r->p, 'dimension' => $dimension,
                 'value' => $r->v ?? '', 'pageviews' => $r->s, 'visitors' => $r->u,
                 'sessions' => $r->s,
-            ], $rows));
+            ], $rows), 100) as $chunk) {
+                DB::table($table)->insert($chunk);
+            }
         }
     }
 }
