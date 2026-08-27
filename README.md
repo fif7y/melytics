@@ -4,6 +4,16 @@ Privacy-first, cookieless web analytics. A modern dashboard,
 ad-blocker-resistant first-party ingestion, and a two-tier privacy model —
 consentless by default, consent-gated extras only where the law requires.
 
+**Runs on the $3/mo shared hosting you already have. Talks to your AI.**
+
+- **No VPS, no Docker, no ClickHouse.** Every other self-hosted analytics
+  assumes a server you administer. melytics runs on plain cPanel-style
+  shared hosting: PHP + SQLite + a cron line. If your host can run
+  WordPress, it can run melytics — see `deploy/shared-hosting.md`.
+- **AI-native.** A bundled MCP server exposes your stats to Claude or any
+  MCP client — "what were my top pages last week?", "did the launch spike
+  hold?" — answered from your own data, no dashboard tab needed.
+
 ![Dashboard, light](docs/screenshots/dashboard-light.png)
 
 <p align="center">
