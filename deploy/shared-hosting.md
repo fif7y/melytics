@@ -9,9 +9,10 @@ a database (MySQL or SQLite), and cron. Examples below use `stats.example.com`.
    It bundles the API with production dependencies, the dashboard at
    `public/app/`, and the tracker at `public/m.js` — one docroot serves all three.
 2. Upload + extract via your panel's file manager — straight into the folder
-   your (sub)domain serves (e.g. `public_html/`) works: a bundled root
-   `.htaccess` routes everything through `public/` and blocks access to the
-   app internals. If you *can* point the document root at `…/melytics/public`
+   your (sub)domain serves (e.g. `public_html/`) works: the zip has no wrapper
+   folder, and a bundled root `.htaccess` routes everything through `public/`
+   and blocks access to the app internals. If your file manager insists on
+   extracting into a new folder, move that folder's contents up afterward. If you *can* point the document root at `…/melytics/public`
    instead, do — it's tidier.
 3. Visit the domain → the installer at `/install` checks requirements, creates
    your login and first site on SQLite, and shows the tracking snippet plus the

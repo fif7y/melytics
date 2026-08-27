@@ -15,6 +15,8 @@ consentless by default, consent-gated extras only where the law requires.
 <p align="center">
   <a href="https://github.com/fif7y/melytics/releases/latest/download/melytics.zip"><img src="https://img.shields.io/badge/⬇_Download_melytics-2a78d6?style=for-the-badge" alt="Download melytics"></a>
   <br>
+  <a href="#install-without-a-terminal-shared-hosting">Install guide ↓</a>
+  <br>
   <a href="https://github.com/fif7y/melytics/releases/latest"><img src="https://img.shields.io/github/v/release/fif7y/melytics?cacheSeconds=3600" alt="Latest release"></a>
   <a href="https://github.com/fif7y/melytics/releases"><img src="https://img.shields.io/github/downloads/fif7y/melytics/total?color=2ea44f&cacheSeconds=3600" alt="Downloads"></a>
 </p>
@@ -145,13 +147,24 @@ exists in the other theme — see `docs/screenshots/`.
 
 Grab the release zip (or build one with `bash deploy/build-release.sh`), then:
 
-1. Upload and extract it into the folder your (sub)domain serves — a bundled
-   `.htaccess` handles the rest (no docroot fiddling). Or upload the one-file
-   `melytics-installer.php` and it fetches + unpacks the release for you.
-2. Visit `https://your-domain/` — the web installer checks the server, asks for
-   your login and first site, and hands you the tracking snippet plus the one
-   cron line to paste into your panel's Cron Jobs. (No cron yet? Stats refresh
-   whenever you open the dashboard, and it reminds you with the exact line.)
+1. **Give melytics a home.** A subdomain like `stats.your-domain.com` is the
+   usual choice — in your hosting panel, create the subdomain and, if it asks,
+   choose the option that creates a folder for it. That folder is where
+   everything below goes.
+2. **Upload and extract the zip there.** The zip has no wrapper folder, so
+   extracting it in place puts the files exactly where they belong (a bundled
+   `.htaccess` handles the rest — no docroot fiddling). If your file manager
+   insists on extracting into a new folder, move that folder's *contents* up
+   into the subdomain folder afterward.
+
+   *Shortcut:* upload just the one-file `melytics-installer.php` instead and
+   open it in the browser — it downloads and unpacks the release for you, no
+   zip handling at all.
+3. **Visit `https://stats.your-domain.com/`** — the web installer checks the
+   server, asks for your login and first site, and hands you the tracking
+   snippet plus the one cron line to paste into your panel's Cron Jobs. (No
+   cron yet? Stats refresh whenever you open the dashboard, and it reminds you
+   with the exact line.)
 
 Everything runs on SQLite — no database to create. Details and troubleshooting
 in [`deploy/shared-hosting.md`](deploy/shared-hosting.md).

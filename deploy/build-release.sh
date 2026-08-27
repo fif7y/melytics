@@ -37,6 +37,9 @@ printf '%s\n' "$VERSION" > "$STAGE/VERSION"
 
 OUT="$ROOT/melytics-$VERSION.zip"
 rm -f "$OUT" "$ROOT/melytics.zip"
-(cd "$TMP" && zip -qr "$OUT" melytics)
+# Flat zip (no top-level folder): panel file managers extract it straight into
+# the (sub)domain folder without nesting. melytics-installer.php and the
+# self-updater both tolerate flat and legacy melytics/-prefixed layouts.
+(cd "$STAGE" && zip -qr "$OUT" .)
 cp "$OUT" "$ROOT/melytics.zip"   # stable name — deploy/melytics-installer.php fetches releases/latest/download/melytics.zip
 echo "Built $OUT ($(du -h "$OUT" | cut -f1)) + melytics.zip (attach BOTH to the GitHub release)"

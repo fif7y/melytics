@@ -53,7 +53,8 @@ class UpdateController extends Controller
             $archive->extractTo($stage);
             $archive->close();
 
-            $src = $stage.'/melytics';
+            // Flat zip since 0.2.0; tolerate the legacy melytics/-prefixed layout too.
+            $src = is_dir($stage.'/melytics') ? $stage.'/melytics' : $stage;
             abort_unless(is_file($src.'/VERSION') && is_file($src.'/artisan'), 500, 'Release zip has an unexpected layout — update manually.');
 
             // Everything extracted and sane; now overwrite in place.
