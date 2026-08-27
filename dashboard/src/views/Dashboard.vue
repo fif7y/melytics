@@ -279,13 +279,12 @@ async function runUpdate() {
   }
 }
 
-// Dismiss is session-scoped on purpose: the reminder must come back until the
-// cron actually runs, but shouldn't nag within one sitting (cron activation
-// can lag ~30 min on shared hosts).
-const cronBannerHidden = ref(sessionStorage.getItem('melytics_cron_banner') === 'hidden')
-function hideCronBanner() {
-  cronBannerHidden.value = true
-  sessionStorage.setItem('melytics_cron_banner', 'hidden')
+// Minimize, never dismiss: the reminder collapses to a pill that restores it,
+// so it can't be lost by a stray click; it only disappears when cron runs.
+const cronBannerCollapsed = ref(localStorage.getItem('melytics_cron_banner') === 'min')
+function setCronBanner(min: boolean) {
+  cronBannerCollapsed.value = min
+  localStorage.setItem('melytics_cron_banner', min ? 'min' : '')
 }
 
 const resent = ref(false)
@@ -480,7 +479,7 @@ async function logout() {
     </Teleport>
 
     <div
-      v-if="me?.cron_stale && !cronBannerHidden"
+      v-if="me?.cron_stale && !cronBannerCollapsed"
       class="mb-6 flex items-start gap-3 rounded-[14px] bg-[var(--accent-soft)] px-4 py-3 text-sm"
     >
       <div class="min-w-0 flex-1">
@@ -495,12 +494,22 @@ async function logout() {
       </div>
       <button
         class="-mr-1 -mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[var(--ink-3)] hover:bg-[var(--bg)] hover:text-[var(--ink)]"
-        title="Hide until next visit"
-        @click="hideCronBanner"
+        title="Minimize"
+        @click="setCronBanner(true)"
       >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14" /></svg>
       </button>
     </div>
+
+    <button
+      v-if="me?.cron_stale && cronBannerCollapsed"
+      class="mb-6 flex items-center gap-2 rounded-full bg-[var(--accent-soft)] px-3 py-1.5 text-xs text-[var(--ink-2)] hover:text-[var(--ink)]"
+      title="Show cron setup reminder"
+      @click="setCronBanner(false)"
+    >
+      <span class="h-1.5 w-1.5 rounded-full bg-[var(--accent)]"></span>
+      Waiting for the cron job's first run…
+    </button>
 
     <div
       v-if="me?.update"
