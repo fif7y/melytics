@@ -272,11 +272,20 @@ const updateState = ref<'idle' | 'running' | 'failed'>('idle')
 async function runUpdate() {
   updateState.value = 'running'
   try {
-    await api('/update/run', { method: 'POST' })
+    const r = await api<{ version: string }>('/update/run', { method: 'POST' })
+    // Survives the reload so the fresh page can confirm the update worked.
+    sessionStorage.setItem('melytics_updated', r.version)
     location.reload()
   } catch {
     updateState.value = 'failed'
   }
+}
+
+// Post-reload confirmation: shows once, then fades itself out.
+const updatedTo = ref(sessionStorage.getItem('melytics_updated'))
+if (updatedTo.value) {
+  sessionStorage.removeItem('melytics_updated')
+  setTimeout(() => (updatedTo.value = null), 5000)
 }
 
 // Minimize, never dismiss: the reminder collapses to a pill that restores it,
@@ -511,6 +520,16 @@ async function logout() {
       Waiting for the cron job's first run…
     </button>
 
+    <Transition name="fade">
+      <div
+        v-if="updatedTo"
+        class="mb-6 flex items-center gap-2.5 rounded-[14px] bg-[var(--accent-soft)] px-4 py-3 text-sm"
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
+        <span>Update successful — you're on <b>v{{ updatedTo }}</b>.</span>
+      </div>
+    </Transition>
+
     <div
       v-if="me?.update"
       class="mb-6 flex flex-wrap items-center gap-3 rounded-[14px] bg-[var(--accent-soft)] px-4 py-3 text-sm"
@@ -686,3 +705,13 @@ async function logout() {
     <p v-else-if="loading" class="text-[var(--ink-3)]">Loading…</p>
   </div>
 </template>
+
+<style scoped>
+.fade-leave-active {
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.fade-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+</style>
