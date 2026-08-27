@@ -8,29 +8,34 @@ a database (MySQL or SQLite), and cron. Examples below use `stats.example.com`.
 1. Build or download `melytics-<version>.zip` (`bash deploy/build-release.sh`).
    It bundles the API with production dependencies, the dashboard at
    `public/app/`, and the tracker at `public/m.js` — one docroot serves all three.
-2. Upload + extract via your panel's file manager. The zip has no wrapper
-   folder, and a bundled root `.htaccess` routes everything through `public/`
-   and blocks access to the app internals. If the file manager extracts in
-   place, upload the zip into the folder your (sub)domain serves and extract
-   there. If it only extracts into a new named folder (Hostinger et al.),
-   upload the zip one level up, delete the (sub)domain's folder if it already
-   exists, and extract using that folder's exact name — the extraction
-   creates the docroot itself. Delete the zip afterward; if files ended up
-   one folder too deep, move that folder's contents up. If you *can* point the document root at `…/melytics/public`
-   instead, do — it's tidier.
-3. Visit the domain → the installer at `/install` checks requirements, creates
-   your login and first site on SQLite, and shows the tracking snippet plus the
-   cron line to add in your panel (every minute):
-   `cd ~/melytics && php artisan schedule:run >> /dev/null 2>&1`
+2. Upload + extract via your panel's file manager. The files sit at the top
+   of the zip (no folder inside a folder), and a bundled root `.htaccess`
+   routes everything through `public/` and keeps the app internals private.
+   - File manager can extract **into the current folder**? Upload the zip
+     into the folder your (sub)domain serves and extract it there.
+   - File manager always asks for a **new folder name** (Hostinger et al.)?
+     Upload the zip one level up, remove the (sub)domain's folder if the
+     panel already made one, and extract using that folder's exact name —
+     the extraction creates the docroot for you.
 
-   In the panel's cron form: pick **Custom** (not PHP) if asked, paste the
-   whole line as the command, and set every schedule field — minute, hour,
-   day, month, weekday — to its "Every…" / `*` option (= run every minute).
-   Some hosts take up to ~30 min before a new job first fires.
+   Delete the zip afterward. Files one folder too deep? Move that folder's
+   contents up one level. And if your panel lets you point the document root
+   at `…/public` directly, do — it's tidier.
+3. Visit the domain → the installer at `/install` checks requirements,
+   creates your login and first site on SQLite, then walks you through the
+   rest on screen: the tracking snippet, the cron job, and signing in.
+
+   For the cron: your panel's Cron Jobs form, command
+   `/bin/sh /path/to/melytics/cron.sh` (the installer shows it with your real
+   path). Pick **Custom** (not PHP) if the form asks, and set every schedule
+   field — minute, hour, day, month, weekday — to its "Every…" / `*` option:
+   that means run once a minute. Use the bundled `cron.sh` rather than an
+   inline `cd … && php artisan …` command — some hosts' cron (Hostinger
+   among them) silently never runs inline commands, but always runs a script.
 
    No cron yet? Stats still work — they refresh whenever the dashboard is
    opened — but the cron makes them continuous and powers digest/alert emails.
-   The dashboard reminds you (with the exact line) until it's running.
+   The dashboard reminds you (with the exact command) until it's running.
 
 Even shorter: upload just `deploy/melytics-installer.php` into the folder your
 domain serves and open it in the browser — it downloads the latest release,
@@ -50,9 +55,15 @@ custom layouts.
    `CACHE_STORE=database`, `QUEUE_CONNECTION=database`.
 4. `php artisan migrate --force`
 5. Create your login: `php artisan melytics:user you@example.com`
-6. Cron (your panel's Cron Jobs), every minute:
-   `cd ~/melytics/api && php artisan schedule:run >> /dev/null 2>&1`
-   The scheduler runs rollups every 5 min and pruning nightly.
+6. Cron (your panel's Cron Jobs), every minute. Wrap it in a script — some
+   hosts' cron silently ignores inline `cd … && …` commands:
+   ```sh
+   #!/bin/sh
+   cd ~/melytics/api && php artisan schedule:run >> storage/logs/cron.log 2>&1
+   ```
+   Save as `~/melytics/cron.sh`, then the cron command is
+   `/bin/sh ~/melytics/cron.sh`. The scheduler runs rollups every minute and
+   pruning nightly.
 
 ## Dashboard (static)
 

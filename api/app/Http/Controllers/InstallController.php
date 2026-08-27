@@ -121,6 +121,11 @@ class InstallController extends Controller
             'site' => $site,
             'origin' => $request->getSchemeAndHttpHost(),
             'basePath' => base_path(),
+            // Release installs ship cron.sh — inline cd-&&-artisan lines are
+            // silently ignored by some shared hosts' cron (Hostinger et al.).
+            'cronLine' => is_file(base_path('cron.sh'))
+                ? '/bin/sh '.base_path('cron.sh')
+                : 'cd '.base_path().' && php artisan schedule:run >> /dev/null 2>&1',
         ]);
     }
 

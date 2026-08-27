@@ -147,32 +147,35 @@ exists in the other theme — see `docs/screenshots/`.
 
 Grab the release zip (or build one with `bash deploy/build-release.sh`), then:
 
-1. **Give melytics a home.** A subdomain like `stats.your-domain.com` is the
-   usual choice — create it in your hosting panel and note the folder it
-   serves (e.g. `public_html/stats`). That folder is where everything goes.
-2. **Upload and extract the zip.** The zip has no wrapper folder — its files
-   belong directly in the subdomain's folder (a bundled `.htaccess` handles
-   the rest, no docroot fiddling). File managers extract in one of two ways,
-   so pick the path that matches yours:
-   - **It can extract in place** (into the current folder): upload the zip
-     *into* the subdomain folder and extract it right there.
-   - **It only extracts into a new named folder** (Hostinger and most panel
-     file managers): upload the zip **one level up** (e.g. `public_html/`),
-     delete the subdomain folder if the panel already created it, then
-     extract with the folder name set **exactly** to the subdomain's folder
-     name (e.g. `stats`) — the extraction creates the folder itself.
+1. **Give melytics its own address.** In your hosting panel, create a
+   subdomain — `stats.your-domain.com` works nicely — and note which folder
+   it serves (usually `public_html/stats`). Everything melytics lives in that
+   one folder.
+2. **Get the zip's files into that folder.** The files sit at the top of the
+   zip (no folder inside a folder), so:
+   - If your file manager can extract **into the current folder**: upload the
+     zip into the subdomain's folder and extract it there.
+   - If it always asks for a **new folder name** (Hostinger and most panel
+     file managers do): upload the zip **one level up** (`public_html/`),
+     remove the subdomain's folder if the panel already made one, and extract
+     using the subdomain folder's exact name (`stats`). The extraction
+     creates the folder for you.
 
-   Either way, delete the zip when you're done. If you end up with the files
-   nested one folder too deep, move that folder's *contents* up and delete it.
+   Delete the zip afterwards. Ended up with everything one folder too deep?
+   Move that folder's *contents* up one level and delete the empty folder.
 
-   *Shortcut:* upload just the one-file `melytics-installer.php` instead and
-   open it in the browser — it downloads and unpacks the release for you, no
-   zip handling at all.
-3. **Visit `https://stats.your-domain.com/`** — the web installer checks the
-   server, asks for your login and first site, and hands you the tracking
-   snippet plus the one cron line to paste into your panel's Cron Jobs. (No
-   cron yet? Stats refresh whenever you open the dashboard, and it reminds you
-   with the exact line.)
+   *Prefer to skip the zip entirely?* Upload the one-file
+   `melytics-installer.php` into the subdomain's folder and open it in your
+   browser — it downloads and unpacks the release by itself.
+3. **Open `https://stats.your-domain.com/` in your browser.** The installer
+   checks your server, creates your login and first site, then walks you
+   through the last three steps on screen: paste the tracking snippet into
+   your site (purge your site's cache after — caching plugins keep serving
+   the old pages), add the every-minute cron job (it hands you the exact
+   command — choose "Custom" if your panel asks, and set every schedule
+   field to "Every…"), and sign in. No cron yet? Stats still refresh whenever
+   you open the dashboard, and it reminds you with the exact line until the
+   job runs.
 
 Everything runs on SQLite — no database to create. Details and troubleshooting
 in [`deploy/shared-hosting.md`](deploy/shared-hosting.md).

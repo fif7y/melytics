@@ -164,29 +164,33 @@
           <p class="note">On WordPress: Appearance → Theme File Editor → <code>footer.php</code>, or any
           “insert headers &amp; footers” plugin. Site builders (Squarespace, Webflow, Shopify…) have a
           “custom code” / “code injection” setting — paste it in the footer slot.</p>
+          <p class="note">Using a caching plugin (LiteSpeed Cache, WP Rocket…) or a CDN? Purge the
+          site’s cache after saving — until you do, visitors keep getting the old pages without
+          the snippet.</p>
         </div>
 
         <div class="step">
           <span class="n">02</span>
           <h2>Add the cron job</h2>
-          <p>In your hosting panel’s Cron Jobs, set this to run <strong>every minute</strong> — it keeps stats rolling up:</p>
+          <p>This keeps your stats fresh. In your hosting panel, open <strong>Cron Jobs</strong> and
+          create a new job with this as the command:</p>
           <div class="copyblock">
-            <pre id="cron">cd {{ $basePath }} &amp;&amp; php artisan schedule:run >> /dev/null 2>&1</pre>
+            <pre id="cron">{{ $cronLine }}</pre>
             <button type="button" class="copybtn" data-copy="cron">Copy</button>
           </div>
-          <p class="note">If the form has a PHP / Custom choice, pick <strong>Custom</strong> and paste the
-          whole line as the command. For the schedule, set <em>every</em> field — minute, hour, day,
-          month, weekday — to its “Every…” / <code>*</code> option: that means “run every minute”.
-          Some hosts take up to ~30&nbsp;minutes before a new cron job first fires; the dashboard’s
-          reminder banner disappears once it has.</p>
+          <p class="note">If the form asks PHP or Custom, choose <strong>Custom</strong>. For the
+          schedule, set every dropdown — minute, hour, day, month, weekday — to its
+          “Every&nbsp;…”&nbsp;/&nbsp;<code>*</code> choice. That means “run once a minute”, which is
+          what melytics expects. Some hosts take a little while before a brand-new job first runs —
+          the reminder banner in your dashboard disappears on its own once it has.</p>
         </div>
 
         <div class="step">
           <span class="n">03</span>
           <h2>Sign in to your dashboard</h2>
-          <p>With the email and password you just chose. Visit your site once first — you should
-          see yourself under <strong>Live now</strong> right away, and the day’s numbers within a
-          minute of the cron’s first run. Nothing after a few minutes? Recheck steps 01 and 02.</p>
+          <p>With the email and password you just chose. Visit your site once first — you’ll see
+          yourself under <strong>Live now</strong> right away, and the day’s totals within a minute
+          or two. Nothing showing after a few minutes? Recheck steps 01 and 02.</p>
         </div>
 
         <a class="go" href="{{ $origin }}/app/">Open the dashboard</a>

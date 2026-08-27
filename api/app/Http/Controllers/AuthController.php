@@ -130,7 +130,11 @@ class AuthController extends Controller
             'verified' => (bool) $user->email_verified_at,
             // Instance health, surfaced as dashboard banners/hints.
             'cron_stale' => $cronStale = \App\Support\RollupHeartbeat::cronStale(300),
-            'cron_line' => $cronStale ? 'cd '.base_path().' && php artisan schedule:run >> /dev/null 2>&1' : null,
+            'cron_line' => $cronStale
+                ? (is_file(base_path('cron.sh'))
+                    ? '/bin/sh '.base_path('cron.sh')
+                    : 'cd '.base_path().' && php artisan schedule:run >> /dev/null 2>&1')
+                : null,
             'mail_off' => config('mail.default') === 'log',
             'is_admin' => $user->id === User::min('id'),
             'version' => \App\Support\Version::current(),

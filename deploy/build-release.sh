@@ -34,6 +34,7 @@ cp "$ROOT/deploy/release-env-template" "$STAGE/.env"
 cp "$ROOT/deploy/release-root-htaccess" "$STAGE/.htaccess"
 # Read back by App\Support\Version — update check + one-click updater key off it.
 printf '%s\n' "$VERSION" > "$STAGE/VERSION"
+cp "$ROOT/deploy/release-cron.sh" "$STAGE/cron.sh"
 
 OUT="$ROOT/melytics-$VERSION.zip"
 rm -f "$OUT" "$ROOT/melytics.zip"
