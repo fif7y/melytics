@@ -123,13 +123,12 @@
     }
     .copybtn {
       position: absolute; right: .4rem; top: .4rem;
-      padding: .3rem .6rem; font-size: .7rem; font-weight: 500; font-family: inherit;
-      color: var(--ink-2); background: var(--surface); border: none; border-radius: 6px; cursor: pointer;
-      box-shadow: var(--shadow);
-      transition: color .2s var(--ease), transform .2s var(--ease);
+      padding: .3rem .6rem; font-size: .7rem; font-weight: 600; font-family: inherit;
+      color: var(--bg); background: var(--ink); border: none; border-radius: 6px; cursor: pointer;
+      transition: background .2s var(--ease), transform .2s var(--ease), box-shadow .2s var(--ease);
     }
-    .copybtn:hover { color: var(--ink); transform: translateY(-1px); }
-    .copybtn.done { color: var(--up); }
+    .copybtn:hover { transform: translateY(-1px); box-shadow: 0 3px 10px color-mix(in srgb, var(--ink) 30%, transparent); }
+    .copybtn.done { background: var(--up); color: #fff; }
 
     /* — Load choreography: rise + fade, staggered — */
     @media (prefers-reduced-motion: no-preference) {
