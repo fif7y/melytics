@@ -13,7 +13,7 @@ ad-blocker-resistant first-party ingestion, and a two-tier privacy model —
 consentless by default, consent-gated extras only where the law requires.
 
 <p align="center">
-  <a href="https://github.com/fif7y/melytics/releases/latest/download/melytics.zip"><img src="https://img.shields.io/badge/⬇_Download_melytics-2a78d6?style=for-the-badge" alt="Download melytics"></a>
+  <a href="https://github.com/fif7y/melytics/releases/latest/download/melytics.zip"><img src="docs/assets/download-button.svg" alt="Download melytics"></a>
   <br>
   <a href="#install-without-a-terminal-shared-hosting">Install guide ↓</a>
   <br>
