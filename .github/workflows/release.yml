@@ -20,7 +20,7 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0 # need the annotated tag object for its message
 
@@ -32,7 +32,7 @@ jobs:
           extensions: pdo_sqlite, sqlite3
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: '22'
 
@@ -45,7 +45,14 @@ jobs:
         run: |
           set -euo pipefail
           VERSION="${GITHUB_REF_NAME#v}"
-          NOTES="$(git tag -l --format='%(contents)' "$GITHUB_REF_NAME")"
+          # The annotated tag's message becomes the release notes. actions/checkout
+          # can localize the tag as lightweight (losing the annotation), so read it
+          # from the API — the source of truth — not `git tag --format=%(contents)`.
+          REF="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${GITHUB_REF_NAME}")"
+          NOTES=""
+          if [ "$(jq -r '.object.type' <<<"$REF")" = "tag" ]; then
+            NOTES="$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/$(jq -r '.object.sha' <<<"$REF")" --jq '.message')"
+          fi
           ARGS=(--title "$GITHUB_REF_NAME")
           if [ -n "$NOTES" ]; then ARGS+=(--notes "$NOTES"); else ARGS+=(--generate-notes); fi
           gh release create "$GITHUB_REF_NAME" "${ARGS[@]}" \
