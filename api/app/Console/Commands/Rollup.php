@@ -24,18 +24,28 @@ class Rollup extends Command
         // Rollup keys are site-local time (per-site offset, sampled now — historic
         // DST edges may mis-bucket an hour, acceptable), so days flip at the
         // site's midnight rather than UTC's.
+        // One bad site must not stall the others — or the heartbeat: a missed
+        // beat marks data stale, and every stats request then re-runs (and
+        // re-fails) this same rollup inline. Seen live 2026-08-28.
+        $failed = 0;
         foreach (Site::all(['id', 'timezone']) as $site) {
-            $offset = Stats::tzOffset($site->timezone ?? 'UTC');
-            $this->rollupPeriod($site->id, 'rollup_hourly', 'ts', 'hour', $offset, $from);
-            // daily scan starts at the SITE-LOCAL day start containing $from, as a UTC instant
-            $dayFrom = $from->copy()->addMinutes($offset)->startOfDay()->subMinutes($offset);
-            $this->rollupPeriod($site->id, 'rollup_daily', 'day', 'day', $offset, $dayFrom);
+            try {
+                $offset = Stats::tzOffset($site->timezone ?? 'UTC');
+                $this->rollupPeriod($site->id, 'rollup_hourly', 'ts', 'hour', $offset, $from);
+                // daily scan starts at the SITE-LOCAL day start containing $from, as a UTC instant
+                $dayFrom = $from->copy()->addMinutes($offset)->startOfDay()->subMinutes($offset);
+                $this->rollupPeriod($site->id, 'rollup_daily', 'day', 'day', $offset, $dayFrom);
+            } catch (\Throwable $e) {
+                $failed++;
+                report($e);
+                $this->error("Site {$site->id} rollup failed: {$e->getMessage()}");
+            }
         }
 
         \App\Support\RollupHeartbeat::beat($this->option('lazy') ? 'lazy' : 'cron');
-        $this->info('Rollups updated from '.$from->toDateTimeString());
+        $this->info('Rollups updated from '.$from->toDateTimeString().($failed ? " ($failed site(s) failed)" : ''));
 
-        return self::SUCCESS;
+        return $failed ? self::FAILURE : self::SUCCESS;
     }
 
     private function rollupPeriod(int $siteId, string $table, string $periodCol, string $grain, int $offset, $from): void
@@ -124,12 +134,26 @@ class Rollup extends Command
             $rows = DB::select(Stats::sessionSql()."
                 SELECT $pExpr AS p, $col AS v, COUNT(*) AS s, COUNT(DISTINCT visitor_hash) AS u
                 FROM sp WHERE first_pv >= :from GROUP BY $pExpr, $col", $bind);
+            // merge on (p, v) before inserting: a non-deterministic tie in the
+            // entry/exit subquery can split a group (see sessionSql), and one
+            // duplicate key aborts the whole insert on the table's unique index
+            $merged = [];
+            foreach ($rows as $r) {
+                $k = $r->p.'|'.($r->v ?? '');
+                if (isset($merged[$k])) {
+                    $merged[$k]['pageviews'] += $r->s;
+                    $merged[$k]['sessions'] += $r->s;
+                    $merged[$k]['visitors'] = max($merged[$k]['visitors'], $r->u);
+                } else {
+                    $merged[$k] = [
+                        'site_id' => $siteId, $periodCol => $r->p, 'dimension' => $dimension,
+                        'value' => $r->v ?? '', 'pageviews' => $r->s, 'visitors' => $r->u,
+                        'sessions' => $r->s,
+                    ];
+                }
+            }
             // chunked: one giant insert trips SQLite's variable limit on long backfills
-            foreach (array_chunk(array_map(fn ($r) => [
-                'site_id' => $siteId, $periodCol => $r->p, 'dimension' => $dimension,
-                'value' => $r->v ?? '', 'pageviews' => $r->s, 'visitors' => $r->u,
-                'sessions' => $r->s,
-            ], $rows), 100) as $chunk) {
+            foreach (array_chunk(array_values($merged), 100) as $chunk) {
                 DB::table($table)->insert($chunk);
             }
         }

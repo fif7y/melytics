@@ -208,12 +208,17 @@ const filterLabel = computed(() => {
   return `${panel?.title ?? filter.value.dim}: ${filter.value.value}`
 })
 
+// Generation guard: rapid site/range switches fire overlapping loads, and a
+// slow older response must never overwrite a newer site's data.
+let loadGen = 0
+
 async function load() {
   if (!siteId.value) {
     loading.value = false
     return
   }
   loading.value = true
+  const gen = ++loadGen
   const id = siteId.value
   // hidden modules are not fetched at all (funnels especially are heavier queries)
   const activePanels = PANELS.filter((p) => show(p.key))
@@ -238,6 +243,7 @@ async function load() {
   const r = Object.fromEntries(
     await Promise.all(Object.entries(req).map(async ([k, p]) => [k, await p]))
   ) as { [K in keyof typeof req]: Awaited<(typeof req)[K]> }
+  if (gen !== loadGen) return
   stats.value = r.stats
   annotations.value = r.annotations.annotations
   goals.value = r.goals?.goals ?? []
@@ -252,18 +258,30 @@ async function load() {
   loading.value = false
 }
 
+// Overlap guard + visibility gate: a poll slower than the interval must not
+// stack a second request behind it, and hidden tabs shouldn't poll at all.
+let livePolling = false
+
 async function pollLive() {
-  if (!siteId.value) return
+  if (!siteId.value || livePolling || document.hidden) return
+  livePolling = true
   try {
     const r = await api<{ visitors: number; pages: { path: string; visitors: number }[] }>(`/sites/${siteId.value}/live`)
     live.value = r.visitors
     livePages.value = r.pages.map((p) => ({ value: p.path, pageviews: p.visitors, visitors: p.visitors }))
-  } catch {}
+  } catch {} finally {
+    livePolling = false
+  }
 }
 
 let liveTimer: ReturnType<typeof setInterval>
 
+function onVisible() {
+  if (!document.hidden) pollLive()
+}
+
 onMounted(async () => {
+  document.addEventListener('visibilitychange', onVisible)
   ;[sites.value, me.value] = await Promise.all([api<Site[]>('/sites'), api<Me>('/auth/me')])
   await load()
   await pollLive()
@@ -351,7 +369,10 @@ async function deleteSite() {
   sites.value = sites.value.filter((x) => x.id !== s.id)
   router.push(sites.value.length ? `/${sites.value[0].id}` : '/')
 }
-onBeforeUnmount(() => clearInterval(liveTimer))
+onBeforeUnmount(() => {
+  clearInterval(liveTimer)
+  document.removeEventListener('visibilitychange', onVisible)
+})
 
 watch([siteId, rangeDays, filter, customRange], load)
 

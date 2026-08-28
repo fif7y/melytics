@@ -41,6 +41,10 @@ class Stats
      * visitor split on >30-min inactivity gaps. Heartbeat pings extend duration
      * but never count as pageviews; ping-only sessions are dropped, so first_pv
      * (the session's first pageview) is always set — sessions bucket by it.
+     * entry/exit subqueries MUST stay deterministic (ORDER BY): two hits in the
+     * same second tie on created_at, and SQLite re-evaluates the subquery between
+     * GROUP BY and SELECT — a flipping value splits groups and the rollup insert
+     * then violates its unique key (seen live 2026-08-28).
      * Named bindings: :site, :lookback, :to (+ :fval when $filterDimension given).
      */
     public static function sessionSql(?string $filterDimension = null): string
@@ -69,9 +73,9 @@ class Stats
         ), sp AS (
             SELECT sess.*,
                    (SELECT path FROM mg WHERE mg.visitor_hash = sess.visitor_hash AND mg.sid = sess.sid
-                     AND mg.created_at = sess.first_pv AND mg.event IS NULL LIMIT 1) AS entry_path,
+                     AND mg.created_at = sess.first_pv AND mg.event IS NULL ORDER BY path LIMIT 1) AS entry_path,
                    (SELECT path FROM mg WHERE mg.visitor_hash = sess.visitor_hash AND mg.sid = sess.sid
-                     AND mg.created_at = sess.last_pv AND mg.event IS NULL LIMIT 1) AS exit_path
+                     AND mg.created_at = sess.last_pv AND mg.event IS NULL ORDER BY path LIMIT 1) AS exit_path
             FROM sess WHERE sess.pageviews > 0
         ) ";
     }
