@@ -52,6 +52,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('sites', SiteController::class)->except('show');
 
     Route::get('/sites/{site}/stats', [StatsController::class, 'stats']);
+    Route::get('/sites/{site}/dashboard', [StatsController::class, 'dashboard']);
     Route::get('/sites/{site}/breakdown', [StatsController::class, 'breakdown']);
     Route::get('/sites/{site}/live', [StatsController::class, 'live']);
     Route::get('/sites/{site}/targets', [StatsController::class, 'targets']);

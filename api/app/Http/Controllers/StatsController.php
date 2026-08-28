@@ -22,6 +22,53 @@ class StatsController extends Controller
         return response()->json($this->stats->overview($site, $from, $to, $interval, $this->filterParam($request)));
     }
 
+    /**
+     * One payload for a full dashboard load. Every module the SPA shows used to
+     * be its own request — each one booting the framework, which dominates cost
+     * on shared hosting — so a site switch was ~16 round trips; now it is one.
+     * ?modules= gates the optional sections, ?panels= names the breakdown dims.
+     */
+    public function dashboard(Request $request, Site $site): JsonResponse
+    {
+        $this->authorizeSite($request, $site);
+        $this->lazyRollup();
+        [$from, $to, $interval] = $this->stats->range($request->query('from'), $request->query('to'), $request->query('interval'), $site->timezone);
+        $filter = $this->filterParam($request);
+        $modules = array_filter(explode(',', (string) $request->query('modules')));
+        $panels = array_values(array_intersect(
+            array_filter(explode(',', (string) $request->query('panels'))),
+            Stats::breakdownDimensions()
+        ));
+        $limit = min((int) $request->query('limit', 8), 100);
+        $on = fn (string $m) => in_array($m, $modules, true);
+
+        $annotations = $site->annotations()->orderBy('day')
+            ->where('day', '>=', $from->toDateString())
+            ->where('day', '<=', $to->toDateString())
+            ->get(['id', 'day', 'text']);
+
+        return response()->json([
+            'stats' => $this->stats->overview($site, $from, $to, $interval, $filter),
+            'annotations' => $annotations,
+            'goals' => $on('goals') ? $this->stats->goals($site, $from, $to) : null,
+            'funnels' => $on('funnels') ? $site->funnels->map(fn ($f) => [
+                'id' => $f->id,
+                'name' => $f->name,
+                'definition' => $f->steps,
+                'steps' => $this->stats->funnel($site, $f->steps, $from, $to),
+            ])->all() : null,
+            'vitals' => $on('vitals') ? $this->stats->vitals($site, $from, $to) : null,
+            'retention' => $on('retention') ? $this->tier2->retention($site, $from, $to) : null,
+            'cohorts' => $on('cohorts') ? $this->tier2->cohorts($site) : null,
+            'loyalty' => $on('loyalty') ? $this->tier2->loyalty($site, $from, $to) : null,
+            'attribution' => $on('attribution') ? $this->tier2->attribution($site, $from, $to) : null,
+            'ttc' => $on('ttc') ? $this->tier2->timeToConvert($site, $from, $to) : null,
+            'breakdowns' => collect($panels)->mapWithKeys(fn (string $dim) => [
+                $dim => $this->stats->breakdown($site, $dim, $from, $to, $limit, $filter),
+            ]),
+        ]);
+    }
+
     // No cron? Self-heal: roll up the trailing hour when someone actually looks
     // at their stats and the data is stale. Lock guards concurrent dashboards;
     // cron (schedule:run) stays the real driver — it also powers alerts/digests.

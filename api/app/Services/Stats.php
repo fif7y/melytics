@@ -41,16 +41,18 @@ class Stats
      * visitor split on >30-min inactivity gaps. Heartbeat pings extend duration
      * but never count as pageviews; ping-only sessions are dropped, so first_pv
      * (the session's first pageview) is always set — sessions bucket by it.
-     * entry/exit subqueries MUST stay deterministic (ORDER BY): two hits in the
-     * same second tie on created_at, and SQLite re-evaluates the subquery between
-     * GROUP BY and SELECT — a flipping value splits groups and the rollup insert
-     * then violates its unique key (seen live 2026-08-28).
+     * entry/exit resolve in the same aggregation pass via MIN/MAX over
+     * 'created_at|path' (created_at is a fixed 19-char 'Y-m-d H:i:s', so the
+     * path starts at char 21). This MUST stay deterministic: a value that flips
+     * between GROUP BY and SELECT splits groups and the rollup insert then
+     * violates its unique key (seen live 2026-08-28 with a LIMIT-1 subquery).
      * Named bindings: :site, :lookback, :to (+ :fval when $filterDimension given).
      */
     public static function sessionSql(?string $filterDimension = null): string
     {
         $epoch = SqlDialect::epoch(...);
         $filter = $filterDimension ? ' AND '.self::FILTERABLE[$filterDimension].' = :fval' : '';
+        $tsPath = SqlDialect::concat('created_at', "'|'", 'path');
 
         return "WITH mh AS (
             SELECT visitor_hash, created_at, path, event,
@@ -68,15 +70,12 @@ class Stats
                    {$epoch('MAX(created_at)')} - {$epoch('MIN(created_at)')} AS duration,
                    SUM(CASE WHEN event IS NULL THEN 1 ELSE 0 END) AS pageviews,
                    MIN(CASE WHEN event IS NULL THEN created_at END) AS first_pv,
-                   MAX(CASE WHEN event IS NULL THEN created_at END) AS last_pv
+                   MAX(CASE WHEN event IS NULL THEN created_at END) AS last_pv,
+                   SUBSTR(MIN(CASE WHEN event IS NULL THEN $tsPath END), 21) AS entry_path,
+                   SUBSTR(MAX(CASE WHEN event IS NULL THEN $tsPath END), 21) AS exit_path
             FROM mg GROUP BY visitor_hash, sid
         ), sp AS (
-            SELECT sess.*,
-                   (SELECT path FROM mg WHERE mg.visitor_hash = sess.visitor_hash AND mg.sid = sess.sid
-                     AND mg.created_at = sess.first_pv AND mg.event IS NULL ORDER BY path LIMIT 1) AS entry_path,
-                   (SELECT path FROM mg WHERE mg.visitor_hash = sess.visitor_hash AND mg.sid = sess.sid
-                     AND mg.created_at = sess.last_pv AND mg.event IS NULL ORDER BY path LIMIT 1) AS exit_path
-            FROM sess WHERE sess.pageviews > 0
+            SELECT sess.* FROM sess WHERE sess.pageviews > 0
         ) ";
     }
 

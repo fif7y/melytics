@@ -43,6 +43,16 @@ class IngestController extends Controller
         }
 
         $url = parse_url($data['u']);
+
+        // Asset/feed URLs are not pages: crawlers and platform pollers (Shopify
+        // apps fetching /products.json every 2 min, seen live 2026-08-28) run
+        // the page's JS context or replay beacon URLs and pollute stats. Drop
+        // pageviews and their pings for them; custom events keep their payload.
+        $event = $data['e'] ?? null;
+        if (($event === null || $event === '__ping')
+            && preg_match('/\.(?:js|mjs|css|json|xml|rss|atom|txt|ico|png|jpe?g|gif|svg|webp|avif|woff2?|ttf|otf|eot|map|webmanifest|pdf|zip)$/i', $url['path'] ?? '/')) {
+            return response()->noContent();
+        }
         parse_str($url['query'] ?? '', $query);
         $refHost = null;
         if (! empty($data['r'])) {

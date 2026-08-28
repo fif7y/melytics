@@ -209,52 +209,60 @@ const filterLabel = computed(() => {
 })
 
 // Generation guard: rapid site/range switches fire overlapping loads, and a
-// slow older response must never overwrite a newer site's data.
+// slow older response must never overwrite a newer site's data. The in-flight
+// key dedupes the mount double-fire (onMounted load + the siteId watcher).
 let loadGen = 0
+let inflightKey = ''
 
 async function load() {
   if (!siteId.value) {
     loading.value = false
     return
   }
+  const key = `${siteId.value}|${rangeParams()}|${filterQS()}`
+  if (key === inflightKey) return
+  inflightKey = key
   loading.value = true
   const gen = ++loadGen
   const id = siteId.value
-  // hidden modules are not fetched at all (funnels especially are heavier queries)
+  // hidden modules are not fetched at all (funnels especially are heavier queries).
+  // One batched request: each extra request boots the whole framework on shared
+  // hosting, so a site switch used to cost ~16 round trips.
   const activePanels = PANELS.filter((p) => show(p.key))
-  // keyed requests, not a positional destructure — inserting one can't shift the rest
-  const req = {
-    stats: api<Stats>(`/sites/${id}/stats?${rangeParams()}${filterQS()}`),
-    annotations: api<{ annotations: Annotation[] }>(`/sites/${id}/annotations?${rangeParams()}`),
-    goals: show('goals') ? api<{ goals: GoalRow[] }>(`/sites/${id}/goals?${rangeParams()}`) : null,
-    funnels: show('funnels') ? api<{ funnels: FunnelRow[] }>(`/sites/${id}/funnels?${rangeParams()}`) : null,
-    vitals: show('vitals') ? api<Vitals>(`/sites/${id}/vitals?${rangeParams()}`) : null,
-    retention: visible('retention') ? api<Retention>(`/sites/${id}/retention?${rangeParams()}`) : null,
-    cohorts: visible('cohorts') ? api<{ cohorts: CohortRow[] }>(`/sites/${id}/cohorts`) : null,
-    loyalty: visible('loyalty') ? api<Loyalty>(`/sites/${id}/loyalty?${rangeParams()}`) : null,
-    attribution: visible('attribution') ? api<Attribution>(`/sites/${id}/attribution?${rangeParams()}`) : null,
-    ttc: visible('ttc') ? api<TimeToConvert>(`/sites/${id}/time-to-convert?${rangeParams()}`) : null,
-    panels: Promise.all(
-      activePanels.map((p) =>
-        api<{ rows: BreakdownRow[] }>(`/sites/${id}/breakdown?dimension=${p.key}&${rangeParams()}&limit=8${filterQS()}`)
-      )
-    ),
-  }
-  const r = Object.fromEntries(
-    await Promise.all(Object.entries(req).map(async ([k, p]) => [k, await p]))
-  ) as { [K in keyof typeof req]: Awaited<(typeof req)[K]> }
+  const modules: string[] = [
+    ...['goals', 'funnels', 'vitals'].filter(show),
+    ...['retention', 'cohorts', 'loyalty', 'attribution', 'ttc'].filter(visible),
+  ]
+  const r = await api<{
+    stats: Stats
+    annotations: Annotation[]
+    goals: GoalRow[] | null
+    funnels: FunnelRow[] | null
+    vitals: Vitals | null
+    retention: Retention | null
+    cohorts: CohortRow[] | null
+    loyalty: Loyalty | null
+    attribution: Attribution | null
+    ttc: TimeToConvert | null
+    breakdowns: Record<string, BreakdownRow[]>
+  }>(
+    `/sites/${id}/dashboard?${rangeParams()}${filterQS()}&limit=8` +
+      `&modules=${modules.join(',')}&panels=${activePanels.map((p) => p.key).join(',')}`
+  ).finally(() => {
+    if (inflightKey === key) inflightKey = ''
+  })
   if (gen !== loadGen) return
   stats.value = r.stats
-  annotations.value = r.annotations.annotations
-  goals.value = r.goals?.goals ?? []
-  funnels.value = r.funnels?.funnels ?? []
+  annotations.value = r.annotations
+  goals.value = r.goals ?? []
+  funnels.value = r.funnels ?? []
   vitals.value = r.vitals
   retention.value = r.retention
-  cohorts.value = r.cohorts?.cohorts ?? null
+  cohorts.value = r.cohorts
   loyalty.value = r.loyalty
   attribution.value = r.attribution
   ttc.value = r.ttc
-  breakdowns.value = Object.fromEntries(activePanels.map((p, i) => [p.key, r.panels[i].rows]))
+  breakdowns.value = Object.fromEntries(activePanels.map((p) => [p.key, r.breakdowns[p.key] ?? []]))
   loading.value = false
 }
 
@@ -262,17 +270,29 @@ async function load() {
 // stack a second request behind it, and hidden tabs shouldn't poll at all.
 let livePolling = false
 
-async function pollLive() {
-  if (!siteId.value || livePolling || document.hidden) return
+async function pollLive(initial = false) {
+  // initial=true (mount, site switch) always fetches — the gate only applies
+  // to the background interval, so a hidden or oddly-reporting tab still paints
+  if (!siteId.value || livePolling || (document.hidden && !initial)) return
   livePolling = true
+  const id = siteId.value
   try {
-    const r = await api<{ visitors: number; pages: { path: string; visitors: number }[] }>(`/sites/${siteId.value}/live`)
+    const r = await api<{ visitors: number; pages: { path: string; visitors: number }[] }>(`/sites/${id}/live`)
+    if (id !== siteId.value) return // switched sites mid-flight — stale numbers
     live.value = r.visitors
     livePages.value = r.pages.map((p) => ({ value: p.path, pageviews: p.visitors, visitors: p.visitors }))
   } catch {} finally {
     livePolling = false
   }
 }
+
+// The 15s interval alone leaves the previous site's live numbers on screen
+// after a switch — reset and re-poll immediately.
+watch(siteId, () => {
+  live.value = 0
+  livePages.value = []
+  pollLive(true)
+})
 
 let liveTimer: ReturnType<typeof setInterval>
 
@@ -284,7 +304,7 @@ onMounted(async () => {
   document.addEventListener('visibilitychange', onVisible)
   ;[sites.value, me.value] = await Promise.all([api<Site[]>('/sites'), api<Me>('/auth/me')])
   await load()
-  await pollLive()
+  await pollLive(true)
   liveTimer = setInterval(pollLive, 15_000)
 })
 

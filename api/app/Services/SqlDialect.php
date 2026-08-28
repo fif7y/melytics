@@ -36,6 +36,14 @@ class SqlDialect
             : "CASE WHEN typeof(json_extract(event_props, '$.$field')) IN ('integer','real') THEN CAST(json_extract(event_props, '$.$field') AS REAL) END";
     }
 
+    /** Concatenation expression (MySQL's || is boolean OR without PIPES_AS_CONCAT). */
+    public static function concat(string ...$parts): string
+    {
+        return self::mysql()
+            ? 'CONCAT('.implode(', ', $parts).')'
+            : implode(' || ', $parts);
+    }
+
     /** Period expression bucketing a UTC datetime column into site-local time. */
     public static function periodExpr(string $column, string $grain, int $offsetMin): string
     {
