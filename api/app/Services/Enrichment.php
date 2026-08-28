@@ -33,6 +33,23 @@ class Enrichment
         return $request->ip();
     }
 
+    /**
+     * Stable, non-targetable id from the client-supplied tier-2 visitor id.
+     * HMAC keyed by the app secret: the same raw id always maps to the same
+     * value (per-visitor linkage preserved), but an attacker can't compute the
+     * id a specific real visitor would produce, so forged beacons can't be
+     * aimed at — or collided onto — a genuine visitor. Truncated to fit the
+     * 32-char column. Returns null when there's nothing to hash.
+     */
+    public function visitorId(?string $raw): ?string
+    {
+        if ($raw === null || $raw === '') {
+            return null;
+        }
+
+        return substr(hash_hmac('sha256', $raw, config('app.key')), 0, 32);
+    }
+
     public function isBot(?string $ua): bool
     {
         if ($ua === null || $ua === '') {

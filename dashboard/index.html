@@ -4,6 +4,11 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- The SPA is fully self-contained (no external scripts/fonts/APIs), so it
+         can run under a tight CSP. 'unsafe-inline' style covers Vue's runtime
+         :style bindings and the chart tooltip; frame-ancestors is set via header
+         (X-Frame-Options) since <meta> can't express it. -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none'" />
     <title>melytics | Dashboard</title>
   </head>
   <body>

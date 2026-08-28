@@ -62,6 +62,14 @@ class UpdateController extends Controller
 
             $archive = new ZipArchive;
             abort_unless($archive->open($zip) === true, 500, 'Downloaded zip is unreadable — try again.');
+            // Belt-and-suspenders against zip-slip: reject any entry that would
+            // escape the staging dir before extracting (don't trust ZipArchive's
+            // own path stripping alone).
+            for ($i = 0; $i < $archive->numFiles; $i++) {
+                $name = $archive->getNameIndex($i);
+                abort_if($name === false || str_starts_with($name, '/') || str_contains($name, '..'),
+                    500, 'Release zip has an unsafe path — aborting.');
+            }
             $archive->extractTo($stage);
             $archive->close();
 

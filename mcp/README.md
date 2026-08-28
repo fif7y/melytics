@@ -19,6 +19,8 @@ Any client that speaks Streamable HTTP works. Two options:
 - **URL with embedded token** (for clients without header support): the connector URL from the dashboard.
 - **Bearer header**: endpoint `https://stats.example.com/api/mcp` with `Authorization: Bearer <token>`.
 
+> **Prefer the Bearer header when your client supports it.** A token embedded in the URL path can end up in web-server access logs, proxy/CDN logs, and browser history — anywhere the full URL is recorded. The token is read-only and scoped to MCP, and expires after a year by default (`MELYTICS_MCP_TOKEN_TTL_DAYS`, 0 = never), but if you suspect a connector URL has leaked, regenerate it from **Account → AI assistants** to revoke the old one.
+
 Claude Code:
 
 ```bash

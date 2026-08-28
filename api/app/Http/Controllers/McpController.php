@@ -39,7 +39,8 @@ class McpController extends Controller
         // Legacy tokens minted before scoping carry ['*'], which `can` honors,
         // so existing connectors keep working until they are regenerated.
         $accessToken = $plain ? PersonalAccessToken::findToken($plain) : null;
-        if (! $accessToken || ! $accessToken->can('mcp')) {
+        $expired = $accessToken && $accessToken->expires_at && $accessToken->expires_at->isPast();
+        if (! $accessToken || $expired || ! $accessToken->can('mcp')) {
             return response()->json(['error' => 'invalid or missing token'], 401);
         }
 

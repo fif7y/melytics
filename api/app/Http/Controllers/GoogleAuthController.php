@@ -24,6 +24,9 @@ class GoogleAuthController extends Controller
         $state = Str::random(40);
         cache()->put('google_oauth_state:'.$state, true, now()->addMinutes(10));
 
+        // Bind the flow to THIS browser: the callback must present the same state
+        // back in a first-party cookie, not just echo it in the query. SameSite
+        // must be lax so the cookie survives Google's top-level redirect back.
         return redirect('https://accounts.google.com/o/oauth2/v2/auth?'.http_build_query([
             'client_id' => config('melytics.google.client_id'),
             'redirect_uri' => $this->redirectUri(),
@@ -31,7 +34,7 @@ class GoogleAuthController extends Controller
             'scope' => 'openid email profile',
             'state' => $state,
             'prompt' => 'select_account',
-        ]));
+        ]))->withCookie(cookie('g_oauth_state', $state, 10, '/', null, $request->isSecure(), true, false, 'lax'));
     }
 
     public function callback(Request $request)
@@ -39,7 +42,9 @@ class GoogleAuthController extends Controller
         abort_unless(self::enabled(), 404);
 
         $state = (string) $request->query('state');
-        if (! $request->query('code') || ! cache()->pull('google_oauth_state:'.$state)) {
+        $cookieState = (string) $request->cookie('g_oauth_state');
+        $stateOk = $state !== '' && hash_equals($state, $cookieState) && cache()->pull('google_oauth_state:'.$state);
+        if (! $request->query('code') || ! $stateOk) {
             return $this->toApp(['google_error' => 'Sign-in was cancelled or expired — try again.']);
         }
 

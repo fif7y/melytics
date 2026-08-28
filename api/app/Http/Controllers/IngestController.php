@@ -102,7 +102,7 @@ class IngestController extends Controller
             'event' => $data['e'] ?? null,
             'event_props' => $props,
             // key omitted entirely unless consented, so inserts still work pre-migration
-        ] + ($tier2 && ! empty($data['i']) ? ['visitor_id' => $data['i']] : []));
+        ] + ($tier2 && ! empty($data['i']) ? ['visitor_id' => $enrich->visitorId($data['i'])] : []));
 
         return response()->noContent();
     }

@@ -6,6 +6,7 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 
 class InstallController extends Controller
 {
@@ -23,23 +24,53 @@ class InstallController extends Controller
         }
     }
 
-    public function show()
+    // A random secret written to storage/ on first visit to the install page.
+    // Completing setup requires echoing it back, so only someone with file-system
+    // access (i.e. the person who uploaded melytics) can claim the admin account —
+    // not whoever reaches a freshly-uploaded public instance first. Deleted once
+    // installed. Read via the hosting panel's file manager.
+    private function installToken(): string
+    {
+        $path = storage_path('install-token.txt');
+        if (! is_file($path) || trim((string) @file_get_contents($path)) === '') {
+            @file_put_contents($path, $token = Str::random(40));
+            @chmod($path, 0600);
+
+            return $token;
+        }
+
+        return trim((string) file_get_contents($path));
+    }
+
+    // Loopback/private installs are already unreachable by an outsider, so show
+    // the token inline there (frictionless dev/local setup) rather than making
+    // the operator go read the file.
+    private function tokenIsSafeToShow(Request $request): bool
+    {
+        return in_array($request->ip(), ['127.0.0.1', '::1'], true)
+            || in_array($request->getHost(), ['localhost', '127.0.0.1'], true);
+    }
+
+    public function show(Request $request)
     {
         if (self::installed()) {
             return redirect('/');
         }
 
-        return $this->form();
+        return $this->form($request);
     }
 
-    private function form(?string $error = null, array $old = [], int $status = 200)
+    private function form(Request $request, ?string $error = null, array $old = [], int $status = 200)
     {
+        $token = $this->installToken();
+
         return response()->view('install', [
             'checks' => $this->checks(),
             'done' => false,
             'error' => $error,
             'old' => $old,
             'timezones' => $this->timezones(),
+            'shownToken' => $this->tokenIsSafeToShow($request) ? $token : null,
         ], $status);
     }
 
@@ -66,6 +97,17 @@ class InstallController extends Controller
         }
         abort_unless(collect($this->checks())->every('ok'), 422, 'Server requirements not met.');
 
+        // Setup-token gate: only someone who can read storage/install-token.txt
+        // may create the admin account (see installToken()).
+        if (! hash_equals($this->installToken(), (string) $request->input('setup_token'))) {
+            return $this->form(
+                $request,
+                'That setup code doesn\'t match. Open storage/install-token.txt in your hosting file manager and paste the code exactly.',
+                $request->only(['email', 'site_name', 'domain']),
+                403,
+            );
+        }
+
         // No session on this route — render validation errors directly.
         try {
             $data = $request->validate([
@@ -77,6 +119,7 @@ class InstallController extends Controller
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
             return $this->form(
+                $request,
                 collect($e->errors())->flatten()->first(),
                 $request->only(['email', 'site_name', 'domain']),
                 422,
@@ -105,10 +148,12 @@ class InstallController extends Controller
             ]);
 
             file_put_contents(storage_path('installed.lock'), now()->toIso8601String());
+            @unlink(storage_path('install-token.txt')); // one-time secret, spent
         } catch (\Throwable $e) {
             report($e);
 
             return $this->form(
+                $request,
                 'Install hit a server error: "'.$e->getMessage().'" — nothing you did wrong. '
                 .'Fix the cause (or ask your host), then reload this page and try again.',
                 $request->only(['email', 'site_name', 'domain']),
@@ -153,7 +198,13 @@ class InstallController extends Controller
             file_put_contents($path, "APP_NAME=melytics\nAPP_ENV=production\nAPP_DEBUG=false\nLOG_CHANNEL=daily\nDB_CONNECTION=sqlite\nSESSION_DRIVER=file\nCACHE_STORE=file\nQUEUE_CONNECTION=sync\nMAIL_MAILER=log\n");
         }
         $key = 'base64:'.base64_encode(random_bytes(32));
-        $values = ['APP_KEY' => $key, 'APP_URL' => $request->getSchemeAndHttpHost()];
+        $values = [
+            'APP_KEY' => $key,
+            'APP_URL' => $request->getSchemeAndHttpHost(),
+            // Only mark cookies Secure when installed over HTTPS — forcing it on an
+            // http install would stop them being set at all.
+            'SESSION_SECURE_COOKIE' => $request->isSecure() ? 'true' : 'false',
+        ];
         $host = preg_replace('/^(www|stats|analytics)\./', '', $request->getHost());
         if (! in_array($host, ['localhost', '127.0.0.1'])) {
             $values['MAIL_FROM_ADDRESS'] = 'stats@'.$host;

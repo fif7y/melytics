@@ -14,6 +14,11 @@ return [
         'client_secret' => env('GOOGLE_CLIENT_SECRET'),
     ],
 
+    // MCP connector tokens (Account → AI assistants) expire after this many days,
+    // bounding exposure if a token-in-URL leaks into a proxy/access log. Set to 0
+    // for no expiry (the connector then keeps working until manually regenerated).
+    'mcp_token_ttl_days' => (int) env('MELYTICS_MCP_TOKEN_TTL_DAYS', 365),
+
     // Behind a CDN/reverse proxy, PHP sees the edge IP, so the visitor hash
     // collapses onto a few proxy IPs (breaks uniqueness). Set this to the header
     // your proxy fills with the real client IP (e.g. CF-Connecting-IP on

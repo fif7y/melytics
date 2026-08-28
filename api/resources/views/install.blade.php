@@ -228,6 +228,16 @@
         </ul>
 
         <form method="post" action="/install">
+          <div class="section">Setup code</div>
+          @if ($shownToken)
+            <p class="fieldnote">Local install — your setup code is <code>{{ $shownToken }}</code> (pre-filled below).</p>
+          @else
+            <p class="fieldnote">Open <code>storage/install-token.txt</code> in your hosting file manager
+            and paste the code below. This proves it's you setting up the instance — not a passer-by.</p>
+          @endif
+          <label for="setup_token">Code <span class="hint">— from storage/install-token.txt</span></label>
+          <input id="setup_token" name="setup_token" required value="{{ $shownToken ?? '' }}" autocomplete="off" spellcheck="false">
+
           <div class="section">Set admin login</div>
           <label for="email">Email</label>
           <input id="email" name="email" type="email" required value="{{ $old['email'] ?? '' }}">

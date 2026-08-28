@@ -126,7 +126,13 @@ class AuthController extends Controller
         $user = $request->user();
         $user->tokens()->where('name', 'mcp')->delete();
 
-        return response()->json(['token' => $user->createToken('mcp', ['mcp'])->plainTextToken]);
+        $ttl = (int) config('melytics.mcp_token_ttl_days');
+        $token = $user->createToken('mcp', ['mcp'], $ttl > 0 ? now()->addDays($ttl) : null);
+
+        return response()->json([
+            'token' => $token->plainTextToken,
+            'expires_at' => $token->accessToken->expires_at,
+        ]);
     }
 
     public function logout(Request $request): JsonResponse

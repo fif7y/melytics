@@ -12,3 +12,13 @@
     RewriteCond %{REQUEST_URI} !^/public/
     RewriteRule ^(.*)$ public/$1 [L]
 </IfModule>
+
+# Baseline hardening headers for statically-served files (the SPA at /app/ is
+# served by Apache, so the app's PHP middleware never sees it). CSP is set in the
+# SPA's own <meta> — a strict script CSP here would break the inline-script
+# install page. No-op where mod_headers is unavailable.
+<IfModule mod_headers.c>
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
