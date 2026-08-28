@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import type { Stats } from '../lib/api'
+import { useSiteScopedRef, safeJson } from '../lib/persist'
 
 const props = defineProps<{
   stats: Stats
   metric: 'visitors' | 'pageviews'
   live: number | null
   lineStyle?: 'linear' | 'smooth' | 'step' | 'bars' | 'glow'
+  siteId?: number
 }>()
 const emit = defineEmits<{ 'update:metric': [m: 'visitors' | 'pageviews'] }>()
 
@@ -114,16 +116,12 @@ const tiles = computed(() => {
   return out
 })
 
-// Drag-to-reorder, persisted like the breakdown grid
-const ORDER_KEY = 'melytics_stat_order'
-const order = ref<string[]>(
-  (() => {
-    try {
-      return JSON.parse(localStorage.getItem(ORDER_KEY) ?? '[]')
-    } catch {
-      return []
-    }
-  })()
+// Drag-to-reorder, persisted per-site like the breakdown grid
+const order = useSiteScopedRef<string[]>(
+  'melytics_stat_order',
+  computed(() => props.siteId),
+  (raw) => (safeJson(raw) as string[]) ?? [],
+  true
 )
 const dragKey = ref<string | null>(null)
 const overKey = ref<string | null>(null)
@@ -141,9 +139,6 @@ function dropOn(target: string) {
   const keys = orderedTiles.value.map((t) => t.key)
   keys.splice(keys.indexOf(target), 0, ...keys.splice(keys.indexOf(dragKey.value), 1))
   order.value = keys
-  try {
-    localStorage.setItem(ORDER_KEY, JSON.stringify(keys))
-  } catch {}
   dragKey.value = null
   overKey.value = null
 }

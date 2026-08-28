@@ -16,6 +16,8 @@
   --accent-teal: #0f766e;
   --accent-amber: #b45309;
   --accent-rose: #be185d;
+  --accent-green: #15803d;
+  --accent-orange: #c2410c;
   --compare: #b9b8b1;
   --up: #008300;
   --warn: #d97706;
@@ -40,6 +42,8 @@
     --accent-teal: #2dd4bf;
     --accent-amber: #f59e0b;
     --accent-rose: #fb7185;
+    --accent-green: #4ade80;
+    --accent-orange: #fb923c;
     --compare: #4a4a46;
     --up: #35a55a;
     --warn: #e8a13d;
@@ -62,6 +66,8 @@
   --accent-teal: #2dd4bf;
   --accent-amber: #f59e0b;
   --accent-rose: #fb7185;
+  --accent-green: #4ade80;
+  --accent-orange: #fb923c;
   --compare: #4a4a46;
   --up: #35a55a;
   --warn: #e8a13d;
@@ -85,6 +91,14 @@
 :root[data-accent='rose'] {
   --accent: var(--accent-rose);
   --accent-soft: color-mix(in srgb, var(--accent-rose) 14%, transparent);
+}
+:root[data-accent='green'] {
+  --accent: var(--accent-green);
+  --accent-soft: color-mix(in srgb, var(--accent-green) 14%, transparent);
+}
+:root[data-accent='orange'] {
+  --accent: var(--accent-orange);
+  --accent-soft: color-mix(in srgb, var(--accent-orange) 14%, transparent);
 }
 
 html,

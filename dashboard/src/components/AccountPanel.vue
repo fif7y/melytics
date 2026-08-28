@@ -2,7 +2,14 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { api, type Me, type Site } from '../lib/api'
 import Toggle from './Toggle.vue'
-import { theme, setTheme, type Theme, accent, setAccent, ACCENTS } from '../lib/theme'
+import { theme, setTheme, type Theme, accent, accentHex, setAccent, setAccentHex, applyTheme, ACCENTS } from '../lib/theme'
+
+// Live-preview a custom color while the native picker is open — commit on close
+// (setAccentHex on @change) so dragging doesn't spam storage or chart rebuilds.
+function previewHex(hex: string) {
+  document.documentElement.style.setProperty('--accent', hex)
+  document.documentElement.style.setProperty('--accent-soft', `color-mix(in srgb, ${hex} 14%, transparent)`)
+}
 
 const THEMES: { key: Theme; label: string }[] = [
   { key: 'system', label: 'System' },
@@ -181,7 +188,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey))
 
         <div class="flex-1 space-y-6 overflow-y-auto px-5 pb-5">
           <section>
-            <div class="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--ink-3)]">Theme</div>
+            <div class="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--ink-3)]">Appearance</div>
             <div class="flex gap-1 rounded-lg bg-[var(--bg)] p-1">
               <button
                 v-for="t in THEMES"
@@ -193,11 +200,12 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey))
                 {{ t.label }}
               </button>
             </div>
-            <div class="my-4 flex gap-3 px-1">
+            <div class="mb-2 mt-4 text-xs font-medium text-[var(--ink-3)]">Highlight color</div>
+            <div class="flex items-center justify-between px-1">
               <button
                 v-for="a in ACCENTS"
                 :key="a"
-                class="h-6 w-6 rounded-full transition-shadow"
+                class="h-6 w-6 rounded-full transition-[box-shadow,transform] duration-150 ease-out active:scale-90"
                 :style="{ background: `var(--accent-${a})` }"
                 :class="accent === a ? 'ring-2 ring-[var(--ink)] ring-offset-2 ring-offset-[var(--surface)]' : 'hover:ring-2 hover:ring-[var(--ink-3)] hover:ring-offset-2 hover:ring-offset-[var(--surface)]'"
                 :title="a.charAt(0).toUpperCase() + a.slice(1)"
@@ -205,6 +213,22 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey))
                 :aria-pressed="accent === a"
                 @click="setAccent(a)"
               />
+              <label
+                class="relative h-6 w-6 cursor-pointer rounded-full transition-[box-shadow,transform] duration-150 ease-out active:scale-90"
+                :style="{ background: accentHex ?? 'conic-gradient(from 0deg, #2a78d6, #7c3aed, #be185d, #c2410c, #b45309, #15803d, #0f766e, #2a78d6)' }"
+                :class="accent === 'custom' ? 'ring-2 ring-[var(--ink)] ring-offset-2 ring-offset-[var(--surface)]' : 'hover:ring-2 hover:ring-[var(--ink-3)] hover:ring-offset-2 hover:ring-offset-[var(--surface)]'"
+                title="Custom"
+              >
+                <input
+                  type="color"
+                  class="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                  aria-label="Custom accent color"
+                  :value="accentHex ?? '#2a78d6'"
+                  @input="previewHex(($event.target as HTMLInputElement).value)"
+                  @change="setAccentHex(($event.target as HTMLInputElement).value)"
+                  @blur="applyTheme()"
+                />
+              </label>
             </div>
           </section>
 
@@ -323,21 +347,22 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey))
             </div>
           </section>
 
-          <section>
-            <div class="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--ink-3)]">Site</div>
-            <template v-if="site">
-              <p class="mb-1.5 px-2 text-xs text-[var(--ink-3)]">Paste this on {{ site.domain }}, just before <code class="rounded bg-[var(--bg)] px-1">&lt;/body&gt;</code>:</p>
-              <button
-                class="w-full rounded-lg bg-[var(--bg)] px-3 py-2.5 text-left font-mono text-[11px] leading-relaxed text-[var(--ink-2)] break-all hover:ring-1 ring-[var(--accent)]"
-                :title="copied ? 'Copied' : 'Click to copy'"
-                @click="copySnippet"
-              >{{ snippet }}</button>
-              <p class="mt-1 px-2 text-xs" :class="copied ? 'text-[var(--accent)]' : 'text-[var(--ink-3)]'">
-                {{ copied ? 'Copied.' : 'Click to copy.' }}
-              </p>
-            </template>
+          <section v-if="site">
+            <div class="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--ink-3)]">Tracking snippet</div>
+            <p class="mb-1.5 px-2 text-xs text-[var(--ink-3)]">Paste this on {{ site.domain }}, just before <code class="rounded bg-[var(--bg)] px-1">&lt;/body&gt;</code>:</p>
+            <button
+              class="w-full rounded-lg bg-[var(--bg)] px-3 py-2.5 text-left font-mono text-[11px] leading-relaxed text-[var(--ink-2)] break-all hover:ring-1 ring-[var(--accent)]"
+              :title="copied ? 'Copied' : 'Click to copy'"
+              @click="copySnippet"
+            >{{ snippet }}</button>
+            <p class="mt-1 px-2 text-xs" :class="copied ? 'text-[var(--accent)]' : 'text-[var(--ink-3)]'">
+              {{ copied ? 'Copied.' : 'Click to copy.' }}
+            </p>
+          </section>
 
-            <div class="mt-4">
+          <section>
+            <div class="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--ink-3)]">Sites</div>
+            <div>
               <button
                 v-if="!adding"
                 class="rounded-lg px-2 py-1.5 text-sm text-[var(--ink-2)] hover:bg-[var(--bg)] hover:text-[var(--ink)]"
@@ -367,10 +392,10 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey))
 
             <button
               v-if="site"
-              class="mt-4 rounded-lg px-2 py-1.5 text-sm text-[var(--down,#e34948)] hover:bg-[var(--bg)]"
+              class="mt-1 rounded-lg px-2 py-1.5 text-sm text-[var(--down,#e34948)] hover:bg-[var(--bg)]"
               @click="emit('deleteSite')"
             >
-              Delete this site…
+              Delete {{ site.domain }}…
             </button>
           </section>
         </div>

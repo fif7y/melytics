@@ -14,8 +14,8 @@ import LoyaltyCard from '../components/LoyaltyCard.vue'
 import AttributionCard from '../components/AttributionCard.vue'
 import TimeToConvertCard from '../components/TimeToConvertCard.vue'
 import SharePanel from '../components/SharePanel.vue'
-import { theme, accent } from '../lib/theme'
-import { usePersistedRef, safeJson } from '../lib/persist'
+import { theme, accent, accentHex, scopeAccent } from '../lib/theme'
+import { useSiteScopedRef, safeJson } from '../lib/persist'
 import { useDateRange, todayIso, RANGES, RANGE_PRESETS } from '../lib/useDateRange'
 import SettingsPanel from '../components/SettingsPanel.vue'
 import AccountPanel from '../components/AccountPanel.vue'
@@ -91,14 +91,30 @@ const MODULES = [
   ...PANELS.map((p) => ({ key: p.key, label: p.title })),
 ]
 
-const hidden = usePersistedRef<string[]>('melytics_hidden', (raw) => (safeJson(raw) as string[]) ?? [], true)
+const siteId = computed(() => Number(route.params.siteId) || sites.value[0]?.id)
+const site = computed(() => sites.value.find((s) => s.id === siteId.value))
+// Accent is per-site too — rescope it whenever the viewed site changes
+watch(siteId, (id) => scopeAccent(id), { immediate: true })
+
+// Module visibility + order are per-site (falls back to the legacy global keys)
+const hidden = useSiteScopedRef<string[]>('melytics_hidden', siteId, (raw) => (safeJson(raw) as string[]) ?? [], true)
 const show = (key: string) => !hidden.value.includes(key)
 // Tier-2 modules only render (and fetch) when the site has tier-2 tracking on
 const TIER2_KEYS = MODULES.filter((m) => 'tier2' in m && m.tier2).map((m) => m.key)
 const visible = (key: string) => show(key) && (!TIER2_KEYS.includes(key) || (site.value?.tier2_enabled ?? false))
 
 // Drag-to-reorder breakdown cards, persisted like the hide-toggles
-const order = usePersistedRef<string[]>('melytics_order', (raw) => (safeJson(raw) as string[]) ?? [], true)
+const order = useSiteScopedRef<string[]>('melytics_order', siteId, (raw) => (safeJson(raw) as string[]) ?? [], true)
+// Goals/funnels live in their own fixed row above the grid — swappable pair
+const rowOrder = useSiteScopedRef<string[]>(
+  'melytics_row_order',
+  siteId,
+  (raw) => {
+    const v = safeJson(raw) as string[]
+    return Array.isArray(v) && v.length === 2 && v.includes('goals') && v.includes('funnels') ? v : ['goals', 'funnels']
+  },
+  true
+)
 // Vitals lives in the same reorderable grid as the breakdowns
 // Default grid order for fresh installs — the curated layout (saved 2026-08-26)
 const GRID_DEFAULT = ['page', 'live', 'country', 'referrer', 'device', 'browser', 'vitals', 'entry_page', 'exit_page', 'channel', 'not_found', 'outbound', 'download', 'utm_source', 'utm_medium', 'utm_campaign', 'event', 'loyalty', 'retention', 'attribution', 'ttc', 'cohorts']
@@ -118,15 +134,20 @@ const overKey = ref<string | null>(null)
 
 // Settings lists modules in on-screen order: goals/funnels row first, then the grid's order
 const orderedModules = computed(() => {
-  const idx = (k: string) => (k === 'goals' ? -2 : k === 'funnels' ? -1 : gridIdx(k))
+  const idx = (k: string) => (rowOrder.value.includes(k) ? -2 + rowOrder.value.indexOf(k) : gridIdx(k))
   return MODULES.slice().sort((a, b) => idx(a.key) - idx(b.key))
 })
 // Move one grid card before another in the persisted order. Operates on the
 // full ordered key list (hidden cards included) so both drag surfaces — the
 // grid and the settings list — write the same store.
 function moveKey(from: string, to: string) {
-  // goals/funnels live in a fixed row above the grid — not reorderable
-  if (from === to || !GRID_ITEMS.some((p) => p.key === from) || !GRID_ITEMS.some((p) => p.key === to)) return
+  if (from === to) return
+  // goals/funnels swap within their own row, never mix with the grid
+  if (rowOrder.value.includes(from) && rowOrder.value.includes(to)) {
+    rowOrder.value = rowOrder.value.slice().reverse()
+    return
+  }
+  if (!GRID_ITEMS.some((p) => p.key === from) || !GRID_ITEMS.some((p) => p.key === to)) return
   const keys = GRID_ITEMS.map((p) => p.key).sort((a, b) => gridIdx(a) - gridIdx(b))
   keys.splice(keys.indexOf(to), 0, keys.splice(keys.indexOf(from), 1)[0])
   order.value = keys
@@ -145,7 +166,7 @@ const CHART_STYLES = [
   { key: 'glow', label: 'Glow' },
 ] as const
 type ChartStyle = (typeof CHART_STYLES)[number]['key']
-const chartStyle = usePersistedRef<ChartStyle>('melytics_chart_style', (raw) =>
+const chartStyle = useSiteScopedRef<ChartStyle>('melytics_chart_style', siteId, (raw) =>
   CHART_STYLES.some((s) => s.key === raw) ? (raw as ChartStyle) : 'smooth'
 )
 const chartStyleMenu = ref(false)
@@ -155,7 +176,7 @@ function setChartStyle(k: ChartStyle) {
 }
 
 // Density: compact tightens card padding and row spacing
-const density = usePersistedRef<'comfy' | 'compact'>('melytics_density', (raw) => (raw === 'compact' ? 'compact' : 'comfy'))
+const density = useSiteScopedRef<'comfy' | 'compact'>('melytics_density', siteId, (raw) => (raw === 'compact' ? 'compact' : 'comfy'))
 function setDensity(d: 'comfy' | 'compact') {
   density.value = d
 }
@@ -164,9 +185,6 @@ function toggleModule(key: string) {
   hidden.value = show(key) ? [...hidden.value, key] : hidden.value.filter((k) => k !== key)
   load()
 }
-
-const siteId = computed(() => Number(route.params.siteId) || sites.value[0]?.id)
-const site = computed(() => sites.value.find((s) => s.id === siteId.value))
 
 const delta = computed(() => {
   if (!stats.value) return null
@@ -356,11 +374,16 @@ async function removeNote(id: number) {
 
 async function setTier2(on: boolean) {
   if (!site.value) return
-  const updated = await api<Site>(`/sites/${site.value.id}`, {
-    method: 'PATCH',
-    body: JSON.stringify({ tier2_enabled: on }),
-  })
-  sites.value = sites.value.map((s) => (s.id === updated.id ? updated : s))
+  try {
+    const updated = await api<Site>(`/sites/${site.value.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ tier2_enabled: on }),
+    })
+    sites.value = sites.value.map((s) => (s.id === updated.id ? updated : s))
+  } catch (e) {
+    alert(e instanceof Error ? e.message : 'Could not save')
+    return
+  }
   // tier-2 modules appear/disappear with the toggle — refetch so they have data
   if (on) load()
 }
@@ -572,7 +595,7 @@ async function logout() {
     </main>
 
     <main v-else-if="stats" class="space-y-5" :class="{ compact: density === 'compact' }">
-      <StatStrip :stats="stats" :metric="metric" :live="live" :line-style="chartStyle" @update:metric="metric = $event" />
+      <StatStrip :stats="stats" :metric="metric" :live="live" :line-style="chartStyle" :site-id="siteId" @update:metric="metric = $event" />
 
       <section class="card p-5">
         <div class="flex items-baseline gap-3 mb-2">
@@ -620,7 +643,7 @@ async function logout() {
           <button class="rounded-lg px-3 py-1.5 text-sm text-white bg-[var(--accent)]">Save</button>
         </form>
 
-        <TimeChart :key="`${theme}-${accent}`" :series="stats.series" :previous="stats.previous_series" :metric="metric" :annotations="annotations" :line-style="chartStyle" />
+        <TimeChart :key="`${theme}-${accent}-${accentHex}`" :series="stats.series" :previous="stats.previous_series" :metric="metric" :annotations="annotations" :line-style="chartStyle" />
 
         <div v-if="annotations.length" class="mt-2 flex flex-wrap gap-1.5">
           <span
@@ -642,11 +665,25 @@ async function logout() {
       </section>
 
       <div v-if="show('goals') || show('funnels')" class="grid gap-5 lg:grid-cols-2">
-        <GoalsCard v-if="show('goals')" class="h-full" :site-id="siteId" :goals="goals" :targets="targets" @changed="load" @assist="wizard?.show(goals.length ? 1 : 0)" />
-        <FunnelsCard v-if="show('funnels')" class="h-full" :site-id="siteId" :funnels="funnels" :targets="targets" @changed="load" @assist="wizard?.show(2)" />
+        <template v-for="k in rowOrder" :key="k">
+          <div
+            v-if="show(k)"
+            draggable="true"
+            class="rounded-[14px] transition-opacity"
+            :class="{ 'opacity-40': dragKey === k, 'ring-2 ring-[var(--accent)]': overKey === k && dragKey && dragKey !== k }"
+            @dragstart="dragKey = k"
+            @dragend=";(dragKey = null), (overKey = null)"
+            @dragover.prevent="overKey = k"
+            @dragleave="overKey === k && (overKey = null)"
+            @drop.prevent="dropOn(k)"
+          >
+            <GoalsCard v-if="k === 'goals'" class="h-full" :site-id="siteId" :goals="goals" :targets="targets" @changed="load" @assist="wizard?.show(goals.length ? 1 : 0)" />
+            <FunnelsCard v-else class="h-full" :site-id="siteId" :funnels="funnels" :targets="targets" @changed="load" @assist="wizard?.show(2)" />
+          </div>
+        </template>
       </div>
 
-      <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+      <TransitionGroup tag="div" name="mods" class="relative grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
         <div
           v-for="p in orderedPanels"
           :key="p.key"
@@ -699,7 +736,7 @@ async function logout() {
             @select="(v) => !p.inert && setFilter(p.key, v)"
           />
         </div>
-      </div>
+      </TransitionGroup>
     </main>
 
     <p v-else-if="loading" class="text-[var(--ink-3)]">Loading…</p>
@@ -707,6 +744,30 @@ async function logout() {
 </template>
 
 <style scoped>
+/* FLIP move when grid cards reflow after a toggle or reorder; entering/leaving
+   cards fade instead of popping (leave goes absolute so neighbors glide at once) */
+.mods-move,
+.mods-enter-active,
+.mods-leave-active {
+  transition: transform 0.25s cubic-bezier(0.23, 1, 0.32, 1), opacity 0.2s ease;
+}
+.mods-enter-from,
+.mods-leave-to {
+  opacity: 0;
+  transform: scale(0.95);
+}
+.mods-leave-active {
+  position: absolute;
+}
+@media (prefers-reduced-motion: reduce) {
+  .mods-move,
+  .mods-enter-active,
+  .mods-leave-active {
+    transition: opacity 0.2s ease;
+    transform: none;
+  }
+}
+
 .fade-leave-active {
   transition: opacity 0.4s ease, transform 0.4s ease;
 }
