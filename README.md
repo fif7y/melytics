@@ -17,6 +17,7 @@ consentless by default, consent-gated extras only where the law requires.
   <br>
   <a href="#install-without-a-terminal-shared-hosting">Install guide ↓</a>
   <br>
+  <br>
   <a href="https://github.com/fif7y/melytics/releases/latest"><img src="https://img.shields.io/github/v/release/fif7y/melytics?cacheSeconds=3600" alt="Latest release"></a>
   <a href="https://github.com/fif7y/melytics/releases"><img src="https://img.shields.io/github/downloads/fif7y/melytics/total?color=2ea44f&cacheSeconds=3600" alt="Downloads"></a>
 </p>
