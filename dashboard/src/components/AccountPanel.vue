@@ -205,7 +205,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey))
               <button
                 v-for="a in ACCENTS"
                 :key="a"
-                class="h-6 w-6 rounded-full transition-[box-shadow,transform] duration-150 ease-out active:scale-90"
+                class="h-5 w-5 rounded-full transition-[box-shadow,transform] duration-150 ease-out active:scale-90"
                 :style="{ background: `var(--accent-${a})` }"
                 :class="accent === a ? 'ring-2 ring-[var(--ink)] ring-offset-2 ring-offset-[var(--surface)]' : 'hover:ring-2 hover:ring-[var(--ink-3)] hover:ring-offset-2 hover:ring-offset-[var(--surface)]'"
                 :title="a.charAt(0).toUpperCase() + a.slice(1)"
@@ -214,7 +214,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey))
                 @click="setAccent(a)"
               />
               <label
-                class="relative h-6 w-6 cursor-pointer rounded-full transition-[box-shadow,transform] duration-150 ease-out active:scale-90"
+                class="relative h-5 w-5 cursor-pointer rounded-full transition-[box-shadow,transform] duration-150 ease-out active:scale-90"
                 :style="{ background: accentHex ?? 'conic-gradient(from 0deg, #2a78d6, #7c3aed, #be185d, #c2410c, #b45309, #15803d, #0f766e, #2a78d6)' }"
                 :class="accent === 'custom' ? 'ring-2 ring-[var(--ink)] ring-offset-2 ring-offset-[var(--surface)]' : 'hover:ring-2 hover:ring-[var(--ink-3)] hover:ring-offset-2 hover:ring-offset-[var(--surface)]'"
                 title="Custom"
