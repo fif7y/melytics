@@ -14,6 +14,7 @@ import LoyaltyCard from '../components/LoyaltyCard.vue'
 import AttributionCard from '../components/AttributionCard.vue'
 import TimeToConvertCard from '../components/TimeToConvertCard.vue'
 import BotsCard from '../components/BotsCard.vue'
+import EventPropsCard from '../components/EventPropsCard.vue'
 import AppFooter from '../components/AppFooter.vue'
 import SharePanel from '../components/SharePanel.vue'
 import { theme, accent, accentHex, scopeAccent } from '../lib/theme'
@@ -93,6 +94,7 @@ const MODULES = [
   { key: 'ttc', label: 'Time to convert', tier2: true },
   { key: 'goals', label: 'Goals' },
   { key: 'funnels', label: 'Funnels' },
+  { key: 'event_props', label: 'Event properties' },
   ...PANELS.map((p) => ({ key: p.key, label: p.title })),
 ]
 
@@ -122,8 +124,8 @@ const rowOrder = useSiteScopedRef<string[]>(
 )
 // Vitals lives in the same reorderable grid as the breakdowns
 // Default grid order for fresh installs — the curated layout (saved 2026-08-26)
-const GRID_DEFAULT = ['page', 'live', 'country', 'referrer', 'device', 'browser', 'vitals', 'entry_page', 'exit_page', 'channel', 'not_found', 'outbound', 'download', 'utm_source', 'utm_medium', 'utm_campaign', 'event', 'bots', 'loyalty', 'retention', 'attribution', 'ttc', 'cohorts']
-const SPECIAL_TITLES: Record<string, string> = { live: 'Live', vitals: 'Web Vitals', bots: 'Bots', retention: 'Retention', cohorts: 'Cohorts', loyalty: 'Loyalty', attribution: 'Attribution', ttc: 'Time to convert' }
+const GRID_DEFAULT = ['page', 'live', 'country', 'referrer', 'device', 'browser', 'vitals', 'entry_page', 'exit_page', 'channel', 'not_found', 'outbound', 'download', 'utm_source', 'utm_medium', 'utm_campaign', 'event', 'event_props', 'bots', 'loyalty', 'retention', 'attribution', 'ttc', 'cohorts']
+const SPECIAL_TITLES: Record<string, string> = { live: 'Live', vitals: 'Web Vitals', bots: 'Bots', retention: 'Retention', cohorts: 'Cohorts', loyalty: 'Loyalty', attribution: 'Attribution', ttc: 'Time to convert', event_props: 'Event properties' }
 const GRID_ITEMS = GRID_DEFAULT.map((k) => PANELS.find((p) => p.key === k) ?? { key: k, title: SPECIAL_TITLES[k] })
 // Sort position of a grid card: its saved order, else after everything saved,
 // in default-grid order. Shared by both drag surfaces and the settings list.
@@ -794,8 +796,15 @@ async function logout() {
           />
           <AttributionCard v-else-if="p.key === 'attribution' && attribution" class="h-full" :attribution="attribution" />
           <TimeToConvertCard v-else-if="p.key === 'ttc' && ttc" class="h-full" :ttc="ttc" />
+          <EventPropsCard
+            v-else-if="p.key === 'event_props'"
+            class="h-full"
+            :site-id="siteId"
+            :range="rangeParams()"
+            :events="targets.events"
+          />
           <BreakdownCard
-            v-else-if="!['vitals', 'bots', 'retention', 'live', 'cohorts', 'loyalty', 'attribution', 'ttc'].includes(p.key)"
+            v-else-if="!['vitals', 'bots', 'retention', 'live', 'cohorts', 'loyalty', 'attribution', 'ttc', 'event_props'].includes(p.key)"
             class="h-full"
             :title="p.title"
             :rows="breakdowns[p.key] ?? []"

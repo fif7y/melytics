@@ -124,6 +124,17 @@ export interface BreakdownRow {
   visitors: number
 }
 
+/** A property key seen on a custom event, tagged by its dominant value type. */
+export interface EventPropKey {
+  key: string
+  type: 'number' | 'string'
+}
+/** Result of an event-property breakdown — shape depends on the property type. */
+export type EventPropsResult =
+  | { type: 'string'; prop: string; rows: { value: string; count: number; visitors: number }[] }
+  | { type: 'aggregate'; prop: string; sum: number; avg: number; count: number; min: number; max: number }
+  | { type: 'numeric'; prop: string; by: string; rows: { value: string; sum: number; avg: number; count: number }[] }
+
 /** Blocked bot traffic: total dropped pageviews + top crawler names. */
 export interface Bots {
   total: number

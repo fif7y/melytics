@@ -514,6 +514,97 @@ class Stats
         }
     }
 
+    /**
+     * Distinct property keys seen on a custom event over the range, each tagged
+     * 'number' or 'string' by whether its values are mostly numeric. Powers the
+     * Event properties card's prop dropdown. json_each (SQLite) / JSON_TABLE
+     * (MySQL) enumerate object keys across rows.
+     *
+     * @return array<int, array{key: string, type: string}>
+     */
+    public function eventPropKeys(Site $site, string $event, Carbon $from, Carbon $to, int $limit = 50): array
+    {
+        [$lo, $hi] = self::utcBounds($from, $to);
+        $mysql = DB::connection()->getDriverName() === 'mysql';
+
+        $sql = $mysql
+            ? "SELECT jt.k AS `key`,
+                      SUM(CASE WHEN JSON_TYPE(JSON_EXTRACT(h.event_props, CONCAT('$.', jt.k))) IN ('INTEGER','DOUBLE','DECIMAL','UNSIGNED INTEGER') THEN 1 ELSE 0 END) AS nums,
+                      COUNT(*) AS total
+               FROM hits h, JSON_TABLE(JSON_KEYS(h.event_props), '$[*]' COLUMNS (k VARCHAR(64) PATH '$')) jt
+               WHERE h.site_id = ? AND h.event = ? AND h.created_at BETWEEN ? AND ? AND h.event_props IS NOT NULL
+               GROUP BY jt.k ORDER BY total DESC LIMIT ?"
+            : "SELECT je.key AS key,
+                      SUM(CASE WHEN typeof(je.value) IN ('integer','real') THEN 1 ELSE 0 END) AS nums,
+                      COUNT(*) AS total
+               FROM hits h, json_each(h.event_props) je
+               WHERE h.site_id = ? AND h.event = ? AND h.created_at BETWEEN ? AND ? AND h.event_props IS NOT NULL
+               GROUP BY je.key ORDER BY total DESC LIMIT ?";
+
+        return array_map(
+            fn ($r) => ['key' => $r->key, 'type' => ($r->nums > 0 && $r->nums * 2 >= $r->total) ? 'number' : 'string'],
+            DB::select($sql, [$site->id, $event, $lo->toDateTimeString(), $hi->toDateTimeString(), $limit])
+        );
+    }
+
+    /**
+     * One property on a custom event, over the range (scans raw hits — props
+     * aren't rolled up). $prop/$by are pre-validated by the caller to a safe
+     * key charset. Three shapes:
+     * - string prop, no $by: value distribution — rows {value, count, visitors}.
+     * - numeric prop, no $by: single aggregate — {sum, avg, count, min, max}.
+     * - numeric $prop grouped by string $by: rows {value, sum, avg, count}.
+     */
+    public function eventProps(Site $site, string $event, string $prop, ?string $by, Carbon $from, Carbon $to, int $limit = 20): array
+    {
+        $base = fn () => DB::table('hits')
+            ->where('site_id', $site->id)
+            ->where('event', $event)
+            ->whereNotNull('event_props')
+            ->whereBetween('created_at', self::utcBounds($from, $to));
+
+        $num = SqlDialect::jsonNum($prop);
+
+        if ($by !== null && $by !== '') {
+            $byCol = SqlDialect::jsonStr($by);
+
+            return [
+                'type' => 'numeric', 'prop' => $prop, 'by' => $by,
+                'rows' => $base()
+                    ->whereRaw("$num IS NOT NULL")
+                    ->groupByRaw($byCol)
+                    ->orderByRaw("SUM($num) DESC")
+                    ->limit($limit)
+                    ->selectRaw("$byCol as value, SUM($num) as sum, AVG($num) as avg, COUNT($num) as count")
+                    ->get(),
+            ];
+        }
+
+        // No group-by: numeric prop -> one aggregate; otherwise string distribution.
+        if ($base()->whereRaw("$num IS NOT NULL")->exists()) {
+            $a = $base()->selectRaw("SUM($num) as sum, AVG($num) as avg, COUNT($num) as count, MIN($num) as min, MAX($num) as max")->first();
+
+            return [
+                'type' => 'aggregate', 'prop' => $prop,
+                'sum' => (float) $a->sum, 'avg' => (float) $a->avg, 'count' => (int) $a->count,
+                'min' => (float) $a->min, 'max' => (float) $a->max,
+            ];
+        }
+
+        $str = SqlDialect::jsonStr($prop);
+
+        return [
+            'type' => 'string', 'prop' => $prop,
+            'rows' => $base()
+                ->whereRaw("$str IS NOT NULL")
+                ->groupByRaw($str)
+                ->orderByRaw('COUNT(*) DESC')
+                ->limit($limit)
+                ->selectRaw("$str as value, COUNT(*) as count, COUNT(DISTINCT visitor_hash) as visitors")
+                ->get(),
+        ];
+    }
+
     public function range(?string $from, ?string $to, ?string $interval = null, string $tz = 'UTC'): array
     {
         $toC = Carbon::parse($to ?? now($tz)->toDateString(), $tz)->startOfDay();

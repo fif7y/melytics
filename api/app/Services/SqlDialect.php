@@ -28,6 +28,18 @@ class SqlDialect
             : "json_extract(event_props, '$.url')";
     }
 
+    /**
+     * String value of an arbitrary event_props key, NULL when absent.
+     * $key is interpolated into the JSON path, so callers MUST restrict it to a
+     * safe charset first (see StatsController: ^[A-Za-z0-9_-]{1,64}$).
+     */
+    public static function jsonStr(string $key): string
+    {
+        return self::mysql()
+            ? "JSON_UNQUOTE(JSON_EXTRACT(event_props, '$.$key'))"
+            : "json_extract(event_props, '$.$key')";
+    }
+
     /** Numeric JSON prop from event_props as a float, NULL when absent or non-numeric. */
     public static function jsonNum(string $field): string
     {

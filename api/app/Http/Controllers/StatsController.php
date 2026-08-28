@@ -122,6 +122,37 @@ class StatsController extends Controller
         ]);
     }
 
+    // Prop keys seen on a custom event, tagged number/string — feeds the
+    // Event properties card's property dropdown.
+    public function eventPropKeys(Request $request, Site $site): JsonResponse
+    {
+        $this->authorizeSite($request, $site);
+        $event = $request->validate(['event' => 'required|string|max:64'])['event'];
+        [$from, $to] = $this->stats->range($request->query('from'), $request->query('to'), null, $site->timezone);
+
+        return response()->json(['keys' => $this->stats->eventPropKeys($site, $event, $from, $to)]);
+    }
+
+    // Breakdown/aggregation of one event property (optionally a numeric measure
+    // grouped by a categorical key). Keys are charset-restricted because they
+    // are interpolated into the JSON path (see Stats::eventProps / SqlDialect).
+    public function eventProps(Request $request, Site $site): JsonResponse
+    {
+        $this->authorizeSite($request, $site);
+        $key = ['required', 'regex:/^[A-Za-z0-9_-]{1,64}$/'];
+        $data = $request->validate([
+            'event' => 'required|string|max:64',
+            'prop' => $key,
+            'by' => ['nullable', 'regex:/^[A-Za-z0-9_-]{1,64}$/'],
+        ]);
+        [$from, $to] = $this->stats->range($request->query('from'), $request->query('to'), null, $site->timezone);
+        $limit = min((int) $request->query('limit', 20), 100);
+
+        return response()->json(
+            $this->stats->eventProps($site, $data['event'], $data['prop'], $data['by'] ?? null, $from, $to, $limit)
+        );
+    }
+
     public function goals(Request $request, Site $site): JsonResponse
     {
         $this->authorizeSite($request, $site);
