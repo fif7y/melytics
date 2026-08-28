@@ -6,6 +6,7 @@ use App\Http\Controllers\FunnelController;
 use App\Http\Controllers\GoogleAuthController;
 use App\Http\Controllers\GoalController;
 use App\Http\Controllers\IngestController;
+use App\Http\Controllers\MailSettingsController;
 use App\Http\Controllers\McpController;
 use App\Http\Controllers\PublicShareController;
 use App\Http\Controllers\ShareLinkController;
@@ -45,6 +46,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/auth/mcp-token', [AuthController::class, 'mcpToken'])->middleware('throttle:5,1');
     Route::put('/auth/google/settings', [GoogleAuthController::class, 'saveSettings']);
     Route::delete('/auth/google/settings', [GoogleAuthController::class, 'removeSettings']);
+    Route::get('/auth/mail', [MailSettingsController::class, 'show']);
+    Route::put('/auth/mail/settings', [MailSettingsController::class, 'save']);
+    Route::delete('/auth/mail/settings', [MailSettingsController::class, 'remove']);
+    Route::post('/auth/mail/test', [MailSettingsController::class, 'test'])->middleware('throttle:5,1');
 
     Route::post('/update/check', [UpdateController::class, 'check'])->middleware('throttle:10,1');
     Route::post('/update/run', [UpdateController::class, 'run'])->middleware('throttle:3,10');

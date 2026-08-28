@@ -6,6 +6,7 @@ const props = defineProps<{ site: Site | null }>()
 const emit = defineEmits<{
   addSite: [payload: { name: string; domain: string }]
   deleteSite: []
+  updateSite: [patch: { currency: string | null }]
 }>()
 
 const open = ref(false)
@@ -22,6 +23,21 @@ async function copySnippet() {
     copied.value = true
     setTimeout(() => (copied.value = false), 1500)
   } catch {}
+}
+
+// Revenue currency — formats goal revenue; none = plain numbers. Symbols are
+// derived live from Intl so the chooser shows the real rendering.
+const CURRENCIES = ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'NZD', 'JPY', 'CHF', 'SEK', 'NOK', 'DKK', 'PLN', 'CZK', 'BRL', 'MXN', 'INR', 'CNY', 'KRW', 'SGD', 'HKD', 'ZAR', 'ILS', 'AED', 'TRY']
+function currencyLabel(c: string) {
+  try {
+    const sym = (0).toLocaleString(undefined, { style: 'currency', currency: c, maximumFractionDigits: 0 }).replace(/[\d\s ,.]/g, '')
+    return sym && sym !== c ? `${c} · ${sym}` : c
+  } catch {
+    return c
+  }
+}
+function setCurrency(e: Event) {
+  emit('updateSite', { currency: (e.target as HTMLSelectElement).value || null })
 }
 
 const adding = ref(false)
@@ -50,7 +66,86 @@ onMounted(async () => {
   try {
     googleOn.value = (await api<{ google: boolean }>('/auth/config')).google
   } catch {}
+  // Email delivery is admin-only — the 403 for everyone else hides the section.
+  try {
+    mail.value = await api<MailStatus>('/auth/mail')
+  } catch {}
 })
+
+// Email delivery — swap the host's sendmail for any SMTP provider (ESP), so
+// digests/alerts/resets actually reach inboxes. Guided like Google sign-in.
+interface MailStatus {
+  mailer: string
+  host: string | null
+  from: string | null
+}
+const mail = ref<MailStatus | null>(null)
+const mSetup = ref(false)
+const mHost = ref('')
+const mPort = ref('587')
+const mUser = ref('')
+const mPass = ref('')
+const mFrom = ref('')
+const mBusy = ref(false)
+const mError = ref('')
+const mTested = ref('')
+
+const mailLabel = computed(() => {
+  if (!mail.value) return ''
+  if (mail.value.mailer === 'smtp') return `SMTP · ${mail.value.host}`
+  if (mail.value.mailer === 'log') return 'Off — mail is only logged'
+  return 'Host sendmail'
+})
+
+async function saveMail() {
+  mBusy.value = true
+  mError.value = ''
+  mTested.value = ''
+  try {
+    mail.value = await api<MailStatus>('/auth/mail/settings', {
+      method: 'PUT',
+      body: JSON.stringify({
+        host: mHost.value.trim(),
+        port: Number(mPort.value) || 587,
+        username: mUser.value.trim(),
+        password: mPass.value,
+        from_address: mFrom.value.trim(),
+      }),
+    })
+    mSetup.value = false
+    mPass.value = ''
+  } catch (e) {
+    mError.value = e instanceof Error ? e.message : 'Could not save'
+  } finally {
+    mBusy.value = false
+  }
+}
+
+async function testMail() {
+  mBusy.value = true
+  mError.value = ''
+  mTested.value = ''
+  try {
+    mTested.value = (await api<{ sent: string }>('/auth/mail/test', { method: 'POST' })).sent
+  } catch (e) {
+    mError.value = e instanceof Error ? e.message : 'Send failed'
+  } finally {
+    mBusy.value = false
+  }
+}
+
+async function revertMail() {
+  mBusy.value = true
+  mError.value = ''
+  mTested.value = ''
+  try {
+    mail.value = await api<MailStatus>('/auth/mail/settings', { method: 'DELETE' })
+  } catch (e) {
+    mError.value = e instanceof Error ? e.message : 'Could not save'
+  } finally {
+    mBusy.value = false
+  }
+}
 
 async function copyRedirect() {
   try {
@@ -271,6 +366,72 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey))
             <p v-if="gError && !gSetup" class="px-2 text-xs text-[var(--down)]">{{ gError }}</p>
           </section>
 
+          <section v-if="mail">
+            <div class="mb-2.5 text-xs font-medium uppercase tracking-wide text-[var(--ink-3)]">Email delivery</div>
+            <div class="flex items-center justify-between px-2 py-1 text-sm">
+              <span>{{ mailLabel }}</span>
+              <button class="text-xs text-[var(--accent)]" @click="mSetup = !mSetup">
+                {{ mSetup ? 'Hide setup' : mail.mailer === 'smtp' ? 'Change' : 'Set up' }}
+              </button>
+            </div>
+
+            <div v-if="mSetup" class="mt-2 space-y-3 rounded-lg bg-[var(--bg)] p-4 text-xs text-[var(--ink-2)]">
+              <p>
+                Digests, alerts and password resets go out through your host's sendmail by
+                default — spam filters often distrust it. Point melytics at any SMTP
+                provider (Resend, Postmark, Brevo… free tiers exist) for reliable delivery.
+              </p>
+              <div class="grid grid-cols-[1fr_5rem] gap-2">
+                <input
+                  v-model="mHost"
+                  placeholder="SMTP host (e.g. smtp.resend.com)"
+                  class="w-full rounded-md bg-[var(--surface)] px-2.5 py-2 font-mono text-[10px] outline-none focus:ring-1 ring-[var(--accent)] placeholder:font-sans placeholder:text-xs placeholder:text-[var(--ink-3)]"
+                />
+                <input
+                  v-model="mPort"
+                  inputmode="numeric"
+                  placeholder="587"
+                  class="w-full rounded-md bg-[var(--surface)] px-2.5 py-2 font-mono text-[10px] outline-none focus:ring-1 ring-[var(--accent)] placeholder:font-sans placeholder:text-xs placeholder:text-[var(--ink-3)]"
+                />
+              </div>
+              <input
+                v-model="mUser"
+                placeholder="Username"
+                class="w-full rounded-md bg-[var(--surface)] px-2.5 py-2 font-mono text-[10px] outline-none focus:ring-1 ring-[var(--accent)] placeholder:font-sans placeholder:text-xs placeholder:text-[var(--ink-3)]"
+              />
+              <input
+                v-model="mPass"
+                type="password"
+                placeholder="Password or API key"
+                class="w-full rounded-md bg-[var(--surface)] px-2.5 py-2 font-mono text-[10px] outline-none focus:ring-1 ring-[var(--accent)] placeholder:font-sans placeholder:text-xs placeholder:text-[var(--ink-3)]"
+              />
+              <input
+                v-model="mFrom"
+                placeholder="From address (e.g. stats@yourdomain.com)"
+                class="w-full rounded-md bg-[var(--surface)] px-2.5 py-2 font-mono text-[10px] outline-none focus:ring-1 ring-[var(--accent)] placeholder:font-sans placeholder:text-xs placeholder:text-[var(--ink-3)]"
+              />
+              <button
+                class="w-full rounded-md bg-[var(--accent)] py-1.5 font-medium text-white disabled:opacity-50"
+                :disabled="mBusy || !mHost || !mUser || !mPass || !mFrom"
+                @click="saveMail"
+              >Switch to SMTP</button>
+              <button
+                v-if="mail.mailer === 'log'"
+                class="w-full text-left text-[var(--ink-3)] hover:text-[var(--ink)] disabled:opacity-50"
+                :disabled="mBusy"
+                @click="revertMail"
+              >…or just turn on the host's sendmail (delivery not guaranteed)</button>
+            </div>
+            <template v-else-if="mail.mailer === 'smtp'">
+              <div class="flex items-center gap-4 px-2 py-1 text-xs">
+                <button class="text-[var(--accent)] disabled:opacity-50" :disabled="mBusy" @click="testMail">Send a test email</button>
+                <button class="text-[var(--ink-3)] hover:text-[var(--down)] disabled:opacity-50" :disabled="mBusy" @click="revertMail">Use host sendmail</button>
+              </div>
+              <p v-if="mTested" class="px-2 text-xs text-[var(--accent)]">Sent to {{ mTested }} — check your inbox.</p>
+            </template>
+            <p v-if="mError" class="px-2 text-xs text-[var(--down)]">{{ mError }}</p>
+          </section>
+
           <section v-if="site">
             <div class="mb-2.5 text-xs font-medium uppercase tracking-wide text-[var(--ink-3)]">Tracking snippet</div>
             <p class="mb-2 px-2 text-xs text-[var(--ink-3)]">Paste this on {{ site.domain }}, just before <code class="rounded bg-[var(--bg)] px-1">&lt;/body&gt;</code>:</p>
@@ -282,6 +443,22 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey))
             <p class="mt-1 px-2 text-xs" :class="copied ? 'text-[var(--accent)]' : 'text-[var(--ink-3)]'">
               {{ copied ? 'Copied.' : 'Click to copy.' }}
             </p>
+          </section>
+
+          <section v-if="site">
+            <div class="mb-2.5 text-xs font-medium uppercase tracking-wide text-[var(--ink-3)]">Revenue</div>
+            <div class="flex items-center justify-between px-2 py-1 text-sm">
+              <span>Currency</span>
+              <select
+                :value="site.currency ?? ''"
+                class="rounded-lg bg-[var(--bg)] px-2.5 py-1.5 text-sm outline-none focus:ring-2 ring-[var(--accent)]"
+                @change="setCurrency"
+              >
+                <option value="">Plain numbers</option>
+                <option v-for="c in CURRENCIES" :key="c" :value="c">{{ currencyLabel(c) }}</option>
+              </select>
+            </div>
+            <p class="px-2 text-xs text-[var(--ink-3)]">Formats goal revenue for {{ site.domain }}.</p>
           </section>
 
           <section>

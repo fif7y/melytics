@@ -146,8 +146,8 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey))
             <Toggle label="Spike & drop alerts" :on="site.alerts_enabled" @change="(on) => emit('notify', 'alerts_enabled', on)" />
             <p class="mt-1.5 px-2 text-xs text-[var(--ink-3)]">Alerts compare today to the trailing week, at most once a day.</p>
             <p v-if="me?.mail_off" class="mt-1.5 px-2 text-xs text-[var(--warn)]">
-              Email sending isn't configured, so these won't be delivered — set
-              <code class="rounded bg-[var(--bg)] px-1">MAIL_MAILER=sendmail</code> in .env (deploy guide has details).
+              Email sending isn't configured, so these won't be delivered — set it up
+              under Settings → Email delivery.
             </p>
           </section>
         </div>

@@ -15,10 +15,17 @@ class EnvFile
             // arbitrary extra config line (e.g. a Google secret flipping APP_DEBUG).
             if ($value !== null) {
                 $value = str_replace(["\r", "\n"], '', $value);
+                // Quote anything dotenv would misparse bare (spaces, #, quotes —
+                // SMTP passwords especially); escape \ and " inside the quotes.
+                if (preg_match('~[^A-Za-z0-9_.@:+/=-]~', $value)) {
+                    $value = '"'.str_replace(['\\', '"'], ['\\\\', '\\"'], $value).'"';
+                }
             }
             $line = $value === null ? '' : $key.'='.$value;
             if (preg_match("/^#?\s*{$key}=.*/m", $env)) {
-                $env = preg_replace("/^#?\s*{$key}=.*\n?/m", $line === '' ? '' : $line."\n", $env);
+                // strtr: the line is a preg_replace *replacement*, where bare $ and \
+                // are capture references (a "p4$$word" would corrupt the file).
+                $env = preg_replace("/^#?\s*{$key}=.*\n?/m", $line === '' ? '' : strtr($line, ['\\' => '\\\\', '$' => '\\$'])."\n", $env);
             } elseif ($line !== '') {
                 $env = rtrim($env)."\n".$line."\n";
             }
