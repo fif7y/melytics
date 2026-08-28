@@ -32,6 +32,7 @@ class SiteController extends Controller
             'name' => 'sometimes|string|max:255',
             'domain' => 'sometimes|string|max:255',
             'timezone' => 'sometimes|timezone',
+            'currency' => ['sometimes', 'nullable', 'string', 'regex:/^[A-Za-z]{3}$/'],
             'retention_days' => 'sometimes|integer|min:1|max:3650',
             'tier2_enabled' => 'sometimes|boolean',
             'digest_enabled' => 'sometimes|boolean',

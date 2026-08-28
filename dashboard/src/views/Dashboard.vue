@@ -380,14 +380,16 @@ async function resendVerification() {
   resent.value = true
 }
 
-async function setNotify(field: 'digest_enabled' | 'alerts_enabled', on: boolean) {
+async function updateSite(patch: Partial<Site>) {
   if (!site.value) return
   const updated = await api<Site>(`/sites/${site.value.id}`, {
     method: 'PATCH',
-    body: JSON.stringify({ [field]: on }),
+    body: JSON.stringify(patch),
   })
   sites.value = sites.value.map((s) => (s.id === updated.id ? updated : s))
 }
+
+const setNotify = (field: 'digest_enabled' | 'alerts_enabled', on: boolean) => updateSite({ [field]: on })
 
 async function addSite(payload: { name: string; domain: string }) {
   try {
@@ -525,6 +527,7 @@ async function logout() {
           :site="site ?? null"
           @add-site="addSite"
           @delete-site="deleteSite"
+          @update-site="updateSite"
         />
         <AccountPanel
           :site="site ?? null"
@@ -747,7 +750,7 @@ async function logout() {
             @dragleave="overKey === k && (overKey = null)"
             @drop.prevent="dropOn(k)"
           >
-            <GoalsCard v-if="k === 'goals'" class="h-full" :site-id="siteId" :goals="goals" :targets="targets" @changed="() => load()" @assist="wizard?.show(goals.length ? 1 : 0)" />
+            <GoalsCard v-if="k === 'goals'" class="h-full" :site-id="siteId" :goals="goals" :targets="targets" :currency="site?.currency" @changed="() => load()" @assist="wizard?.show(goals.length ? 1 : 0)" />
             <FunnelsCard v-else class="h-full" :site-id="siteId" :funnels="funnels" :targets="targets" @changed="() => load()" @assist="wizard?.show(2)" />
           </div>
         </template>

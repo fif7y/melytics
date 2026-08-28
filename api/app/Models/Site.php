@@ -10,7 +10,7 @@ use Illuminate\Support\Str;
 
 class Site extends Model
 {
-    protected $fillable = ['name', 'domain', 'timezone', 'retention_days', 'tier2_enabled', 'digest_enabled', 'alerts_enabled'];
+    protected $fillable = ['name', 'domain', 'timezone', 'currency', 'retention_days', 'tier2_enabled', 'digest_enabled', 'alerts_enabled'];
 
     protected $casts = ['tier2_enabled' => 'bool'];
 
@@ -19,6 +19,13 @@ class Site extends Model
     {
         return Attribute::make(
             set: fn (string $v) => strtolower(trim(explode('/', preg_replace('#^https?://#i', '', trim($v)))[0], './ ')),
+        );
+    }
+
+    protected function currency(): Attribute
+    {
+        return Attribute::make(
+            set: fn (?string $v) => $v ? strtoupper($v) : null,
         );
     }
 

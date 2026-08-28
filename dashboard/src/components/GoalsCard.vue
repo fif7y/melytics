@@ -15,7 +15,7 @@ export interface GoalRow {
   avg?: number | null
 }
 
-const props = defineProps<{ siteId: number; goals: GoalRow[]; targets?: { pages: string[]; events: string[] } }>()
+const props = defineProps<{ siteId: number; goals: GoalRow[]; targets?: { pages: string[]; events: string[] }; currency?: string | null }>()
 const emit = defineEmits<{ changed: []; assist: [] }>()
 
 const adding = ref(false)
@@ -26,6 +26,15 @@ const busy = ref(false)
 
 const isEvent = (t: string) => !!t && !t.startsWith('/')
 const num = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits: 2 })
+// Revenue in the site's currency when one is set; plain numbers otherwise.
+function money(n: number) {
+  if (!props.currency) return num(n)
+  try {
+    return n.toLocaleString(undefined, { style: 'currency', currency: props.currency, maximumFractionDigits: 2 })
+  } catch {
+    return num(n)
+  }
+}
 
 // Picking a real target auto-names the goal (still editable)
 function suggestName() {
@@ -171,8 +180,8 @@ async function remove(id: number) {
           <span
             v-if="g.revenue != null"
             class="ml-auto text-sm tabular-nums font-medium text-[var(--accent)]"
-            :title="g.avg != null ? `avg ${num(g.avg)} per conversion · sums '${g.value_prop}'` : undefined"
-          >{{ num(g.revenue) }}</span>
+            :title="g.avg != null ? `avg ${money(g.avg)} per conversion · sums '${g.value_prop}'` : undefined"
+          >{{ money(g.revenue) }}</span>
           <span class="text-sm tabular-nums" :class="{ 'ml-auto': g.revenue == null }">{{ g.conversions.toLocaleString() }}</span>
           <span class="text-sm tabular-nums text-[var(--ink-2)] w-14 text-right">{{ g.rate }}%</span>
           <button

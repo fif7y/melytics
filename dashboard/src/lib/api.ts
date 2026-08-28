@@ -72,6 +72,7 @@ export interface Site {
   domain: string
   key: string
   timezone: string
+  currency: string | null
   tier2_enabled: boolean
   digest_enabled: boolean
   alerts_enabled: boolean
