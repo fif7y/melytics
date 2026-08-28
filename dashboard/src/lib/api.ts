@@ -123,3 +123,9 @@ export interface BreakdownRow {
   pageviews: number
   visitors: number
 }
+
+/** Blocked bot traffic: total dropped pageviews + top crawler names. */
+export interface Bots {
+  total: number
+  names: { value: string; pageviews: number }[]
+}

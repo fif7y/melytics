@@ -7,6 +7,7 @@ export default defineConfig({
   base: './',
   plugins: [vue(), tailwindcss()],
   server: {
+    port: Number(process.env.PORT) || 5173, // harness assigns PORT when 5173 is taken
     proxy: { '/api': 'http://127.0.0.1:8901' },
   },
 })

@@ -17,6 +17,7 @@ class Prune extends Command
 
     public function handle(): int
     {
+        $botTable = \Illuminate\Support\Facades\Schema::hasTable('bot_hits');
         foreach (Site::all() as $site) {
             $deleted = DB::table('hits')
                 ->where('site_id', $site->id)
@@ -24,6 +25,12 @@ class Prune extends Command
                 ->delete();
             if ($deleted) {
                 $this->info("{$site->domain}: pruned $deleted hits");
+            }
+            if ($botTable) {
+                DB::table('bot_hits')
+                    ->where('site_id', $site->id)
+                    ->where('created_at', '<', now()->subDays($site->retention_days))
+                    ->delete();
             }
         }
 

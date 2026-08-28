@@ -5,7 +5,8 @@
       "name": "melytics-dashboard",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev", "--prefix", "dashboard"],
-      "port": 5173
+      "port": 5173,
+      "autoPort": true
     }
   ]
 }

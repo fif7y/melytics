@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { api, setToken, type Annotation, type Attribution, type BreakdownRow, type CohortRow, type Loyalty, type Me, type Retention, type Site, type Stats, type TimeToConvert } from '../lib/api'
+import { api, setToken, type Annotation, type Attribution, type Bots, type BreakdownRow, type CohortRow, type Loyalty, type Me, type Retention, type Site, type Stats, type TimeToConvert } from '../lib/api'
 import TimeChart from '../components/TimeChart.vue'
 import BreakdownCard from '../components/BreakdownCard.vue'
 import StatStrip from '../components/StatStrip.vue'
@@ -13,6 +13,8 @@ import CohortCard from '../components/CohortCard.vue'
 import LoyaltyCard from '../components/LoyaltyCard.vue'
 import AttributionCard from '../components/AttributionCard.vue'
 import TimeToConvertCard from '../components/TimeToConvertCard.vue'
+import BotsCard from '../components/BotsCard.vue'
+import AppFooter from '../components/AppFooter.vue'
 import SharePanel from '../components/SharePanel.vue'
 import { theme, accent, accentHex, scopeAccent } from '../lib/theme'
 import { useSiteScopedRef, safeJson } from '../lib/persist'
@@ -35,6 +37,7 @@ const cohorts = ref<CohortRow[] | null>(null)
 const loyalty = ref<Loyalty | null>(null)
 const attribution = ref<Attribution | null>(null)
 const ttc = ref<TimeToConvert | null>(null)
+const bots = ref<Bots | null>(null)
 const annotations = ref<Annotation[]>([])
 const noting = ref(false)
 const noteDay = ref(new Date().toISOString().slice(0, 10))
@@ -82,6 +85,7 @@ const PANELS: { key: string; title: string; inert?: boolean }[] = [
 const MODULES = [
   { key: 'live', label: 'Live pages' },
   { key: 'vitals', label: 'Web Vitals' },
+  { key: 'bots', label: 'Bots' },
   { key: 'retention', label: 'Retention', tier2: true },
   { key: 'cohorts', label: 'Cohorts', tier2: true },
   { key: 'loyalty', label: 'Loyalty', tier2: true },
@@ -118,8 +122,8 @@ const rowOrder = useSiteScopedRef<string[]>(
 )
 // Vitals lives in the same reorderable grid as the breakdowns
 // Default grid order for fresh installs — the curated layout (saved 2026-08-26)
-const GRID_DEFAULT = ['page', 'live', 'country', 'referrer', 'device', 'browser', 'vitals', 'entry_page', 'exit_page', 'channel', 'not_found', 'outbound', 'download', 'utm_source', 'utm_medium', 'utm_campaign', 'event', 'loyalty', 'retention', 'attribution', 'ttc', 'cohorts']
-const SPECIAL_TITLES: Record<string, string> = { live: 'Live', vitals: 'Web Vitals', retention: 'Retention', cohorts: 'Cohorts', loyalty: 'Loyalty', attribution: 'Attribution', ttc: 'Time to convert' }
+const GRID_DEFAULT = ['page', 'live', 'country', 'referrer', 'device', 'browser', 'vitals', 'entry_page', 'exit_page', 'channel', 'not_found', 'outbound', 'download', 'utm_source', 'utm_medium', 'utm_campaign', 'event', 'bots', 'loyalty', 'retention', 'attribution', 'ttc', 'cohorts']
+const SPECIAL_TITLES: Record<string, string> = { live: 'Live', vitals: 'Web Vitals', bots: 'Bots', retention: 'Retention', cohorts: 'Cohorts', loyalty: 'Loyalty', attribution: 'Attribution', ttc: 'Time to convert' }
 const GRID_ITEMS = GRID_DEFAULT.map((k) => PANELS.find((p) => p.key === k) ?? { key: k, title: SPECIAL_TITLES[k] })
 // Sort position of a grid card: its saved order, else after everything saved,
 // in default-grid order. Shared by both drag surfaces and the settings list.
@@ -231,7 +235,7 @@ async function load(silent = false) {
   // hosting, so a site switch used to cost ~16 round trips.
   const activePanels = PANELS.filter((p) => show(p.key))
   const modules: string[] = [
-    ...['goals', 'funnels', 'vitals'].filter(show),
+    ...['goals', 'funnels', 'vitals', 'bots'].filter(show),
     ...['retention', 'cohorts', 'loyalty', 'attribution', 'ttc'].filter(visible),
   ]
   const r = await api<{
@@ -240,6 +244,7 @@ async function load(silent = false) {
     goals: GoalRow[] | null
     funnels: FunnelRow[] | null
     vitals: Vitals | null
+    bots: Bots | null
     retention: Retention | null
     cohorts: CohortRow[] | null
     loyalty: Loyalty | null
@@ -258,6 +263,7 @@ async function load(silent = false) {
   goals.value = r.goals ?? []
   funnels.value = r.funnels ?? []
   vitals.value = r.vitals
+  bots.value = r.bots
   retention.value = r.retention
   cohorts.value = r.cohorts
   loyalty.value = r.loyalty
@@ -764,6 +770,7 @@ async function logout() {
             empty="No one on the site right now"
           />
           <VitalsCard v-else-if="p.key === 'vitals' && vitals" class="h-full" :vitals="vitals" />
+          <BotsCard v-else-if="p.key === 'bots' && bots" class="h-full" :bots="bots" :humans="stats?.totals.pageviews ?? 0" />
           <RetentionCard
             v-else-if="p.key === 'retention' && retention"
             class="h-full"
@@ -785,7 +792,7 @@ async function logout() {
           <AttributionCard v-else-if="p.key === 'attribution' && attribution" class="h-full" :attribution="attribution" />
           <TimeToConvertCard v-else-if="p.key === 'ttc' && ttc" class="h-full" :ttc="ttc" />
           <BreakdownCard
-            v-else-if="!['vitals', 'retention', 'live', 'cohorts', 'loyalty', 'attribution', 'ttc'].includes(p.key)"
+            v-else-if="!['vitals', 'bots', 'retention', 'live', 'cohorts', 'loyalty', 'attribution', 'ttc'].includes(p.key)"
             class="h-full"
             :title="p.title"
             :rows="breakdowns[p.key] ?? []"
@@ -799,6 +806,8 @@ async function logout() {
     </main>
 
     <p v-else-if="loading" class="text-[var(--ink-3)]">Loading…</p>
+
+    <AppFooter />
   </div>
 </template>
 

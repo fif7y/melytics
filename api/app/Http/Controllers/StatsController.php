@@ -58,6 +58,7 @@ class StatsController extends Controller
                 'steps' => $this->stats->funnel($site, $f->steps, $from, $to),
             ])->all() : null,
             'vitals' => $on('vitals') ? $this->stats->vitals($site, $from, $to) : null,
+            'bots' => $on('bots') ? $this->stats->bots($site, $from, $to) : null,
             'retention' => $on('retention') ? $this->tier2->retention($site, $from, $to) : null,
             'cohorts' => $on('cohorts') ? $this->tier2->cohorts($site) : null,
             'loyalty' => $on('loyalty') ? $this->tier2->loyalty($site, $from, $to) : null,

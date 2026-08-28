@@ -38,19 +38,22 @@ class IngestController extends Controller
         }
 
         $ua = $request->userAgent();
+        $url = parse_url($data['u']);
+        $event = $data['e'] ?? null;
         if ($enrich->isBot($ua)) {
+            $this->logBot($siteId, $enrich->botName($ua), $url['path'] ?? '/', $event);
+
             return response()->noContent();
         }
-
-        $url = parse_url($data['u']);
 
         // Asset/feed URLs are not pages: crawlers and platform pollers (Shopify
         // apps fetching /products.json every 2 min, seen live 2026-08-28) run
         // the page's JS context or replay beacon URLs and pollute stats. Drop
         // pageviews and their pings for them; custom events keep their payload.
-        $event = $data['e'] ?? null;
         if (($event === null || $event === '__ping')
             && preg_match('/\.(?:js|mjs|css|json|xml|rss|atom|txt|ico|png|jpe?g|gif|svg|webp|avif|woff2?|ttf|otf|eot|map|webmanifest|pdf|zip)$/i', $url['path'] ?? '/')) {
+            $this->logBot($siteId, 'Asset scraper', $url['path'] ?? '/', $event);
+
             return response()->noContent();
         }
         parse_str($url['query'] ?? '', $query);
@@ -83,6 +86,23 @@ class IngestController extends Controller
         ] + ($tier2 && ! empty($data['i']) ? ['visitor_id' => $data['i']] : []));
 
         return response()->noContent();
+    }
+
+    /**
+     * Count what gets blocked — bots never enter hits, but the dashboard Bots
+     * card shows them. Pageviews only: a bot's pings/events would count one
+     * visit many times over. Ingest must never fail on this (pre-migration
+     * installs after a code-only deploy), so table errors are swallowed.
+     */
+    private function logBot(int $siteId, string $name, string $path, ?string $event): void
+    {
+        if ($event !== null) {
+            return;
+        }
+        try {
+            \App\Models\BotHit::create(['site_id' => $siteId, 'name' => $name, 'path' => substr($path, 0, 512)]);
+        } catch (\Throwable) {
+        }
     }
 
     /** <noscript> 1px gif fallback: GET /api/echo.gif?k=...&u=... */

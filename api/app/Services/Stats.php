@@ -487,6 +487,33 @@ class Stats
      *
      * @return array{0: Carbon, 1: Carbon, 2: string}
      */
+    /**
+     * Blocked bot traffic over the range: total + top offender names. Reads
+     * bot_hits (written at ingest when a beacon is rejected) — bots never
+     * touch hits or rollups. Rows use value/pageviews so the SPA can render
+     * them like any breakdown. Table may not exist yet after a code-only
+     * deploy; the card just reads empty until the migration runs.
+     */
+    public function bots(Site $site, Carbon $from, Carbon $to, int $limit = 8): array
+    {
+        try {
+            $q = DB::table('bot_hits')
+                ->where('site_id', $site->id)
+                ->whereBetween('created_at', self::utcBounds($from, $to));
+
+            return [
+                'total' => (clone $q)->count(),
+                'names' => (clone $q)->groupBy('name')
+                    ->orderByRaw('COUNT(*) DESC')
+                    ->limit($limit)
+                    ->selectRaw('name as value, COUNT(*) as pageviews')
+                    ->get(),
+            ];
+        } catch (\Throwable) {
+            return ['total' => 0, 'names' => []];
+        }
+    }
+
     public function range(?string $from, ?string $to, ?string $interval = null, string $tz = 'UTC'): array
     {
         $toC = Carbon::parse($to ?? now($tz)->toDateString(), $tz)->startOfDay();

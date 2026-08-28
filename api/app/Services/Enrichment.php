@@ -29,6 +29,26 @@ class Enrichment
         );
     }
 
+    /** Display label for a blocked UA: a recognizable crawler name when there is one. */
+    public function botName(?string $ua): string
+    {
+        if ($ua === null || $ua === '') {
+            return 'No user agent';
+        }
+        if (preg_match(
+            '/(Googlebot|AdsBot|bingbot|BingPreview|DuckDuckBot|YandexBot|Baiduspider|AhrefsBot|SemrushBot|MJ12bot|DotBot|PetalBot|GPTBot|OAI-SearchBot|ClaudeBot|anthropic-ai|PerplexityBot|CCBot|Bytespider|Applebot|facebookexternalhit|Twitterbot|LinkedInBot|WhatsApp|Telegram|Discord|Slackbot|Pinterest|UptimeRobot|Pingdom|StatusCake|HeadlessChrome|Lighthouse|PageSpeed|GTmetrix|curl|Wget|python-requests|Go-http-client|okhttp|axios|PhantomJS)/i',
+            $ua, $m
+        )) {
+            return $m[1];
+        }
+        // Unrecognized but self-declared: keep the token that tripped the filter
+        if (preg_match('/([A-Za-z0-9._-]*(?:bot|crawler|spider)[A-Za-z0-9._-]*)/i', $ua, $m)) {
+            return $m[1];
+        }
+
+        return 'Other bot';
+    }
+
     /** @return array{device:string,browser:string,os:string} */
     public function parseUserAgent(?string $ua): array
     {
