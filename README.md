@@ -8,9 +8,8 @@
   <a href="https://github.com/sponsors/fif7y"><img src="https://img.shields.io/badge/sponsor-%E2%9D%A4-ea4aaa" alt="Sponsor melytics"></a>
 </p>
 
-Privacy-first, cookieless web analytics. A modern dashboard,
-ad-blocker-resistant first-party ingestion, and a two-tier privacy model —
-consentless by default, consent-gated extras only where the law requires.
+**Web analytics for the rest of us.**<br>
+Cookieless by default. Self-hosted on shared hosting. MCP server built in.
 
 <p align="center">
   <a href="https://github.com/fif7y/melytics/releases/latest/download/melytics.zip"><img src="docs/assets/download-button.svg" alt="Download melytics"></a>
@@ -28,8 +27,8 @@ consentless by default, consent-gated extras only where the law requires.
   assumes a server you administer. melytics runs on plain cPanel-style
   shared hosting: PHP + SQLite + a cron line. If your host can run
   WordPress, it can run melytics — see `deploy/shared-hosting.md`.
-- **AI-native.** Every install is an MCP server — paste a connector URL from
-  the dashboard into Claude and ask "what were my top pages last week?",
+- **Every install is an MCP server.** Paste a connector URL from the
+  dashboard into Claude and ask "what were my top pages last week?",
   "did the launch spike hold?" — answered from your own data, no dashboard
   tab needed. See `mcp/README.md`.
 
