@@ -76,7 +76,7 @@ class GoogleAuthController extends Controller
             $user->forceFill(['email_verified_at' => now()])->save();
         }
 
-        return $this->toApp(['token' => $user->createToken('dashboard')->plainTextToken]);
+        return $this->toApp(['token' => $user->createToken('dashboard', ['dashboard'])->plainTextToken]);
     }
 
     // In-app setup (Account → Google sign-in): the first account (the install

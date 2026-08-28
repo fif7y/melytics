@@ -34,7 +34,12 @@ class McpController extends Controller
     public function handle(Request $request, ?string $token = null)
     {
         $plain = $token ?? (string) $request->bearerToken();
-        if (! $plain || ! PersonalAccessToken::findToken($plain)) {
+        // MCP-scoped tokens only — a leaked dashboard token must not drive MCP,
+        // and regenerating the MCP token must actually cut off MCP access.
+        // Legacy tokens minted before scoping carry ['*'], which `can` honors,
+        // so existing connectors keep working until they are regenerated.
+        $accessToken = $plain ? PersonalAccessToken::findToken($plain) : null;
+        if (! $accessToken || ! $accessToken->can('mcp')) {
             return response()->json(['error' => 'invalid or missing token'], 401);
         }
 

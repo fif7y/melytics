@@ -43,10 +43,22 @@ class UpdateController extends Controller
         File::deleteDirectory($stage);
 
         try {
+            $base = 'https://github.com/'.Version::REPO.'/releases/latest/download/';
             // The bootstrap installer fetches this same stable-name asset.
-            $r = Http::timeout(240)->sink($zip)->withUserAgent('melytics-updater')
-                ->get('https://github.com/'.Version::REPO.'/releases/latest/download/melytics.zip');
+            $r = Http::timeout(240)->sink($zip)->withUserAgent('melytics-updater')->get($base.'melytics.zip');
             abort_unless($r->ok(), 502, 'Download failed (HTTP '.$r->status().') — try again, or update manually from GitHub.');
+
+            // Integrity check: releases ship melytics.zip.sha256 alongside the zip.
+            // Verify when present (hard-fail on mismatch); tolerate its absence so
+            // instances can still update from older releases that predate it.
+            $sumRes = Http::timeout(30)->withUserAgent('melytics-updater')->get($base.'melytics.zip.sha256');
+            if ($sumRes->ok()) {
+                $expected = strtolower(trim(explode(' ', trim($sumRes->body()))[0]));
+                if (preg_match('/^[0-9a-f]{64}$/', $expected)) {
+                    abort_unless(hash_equals($expected, hash_file('sha256', $zip)), 422,
+                        'Update integrity check failed (checksum mismatch) — aborting. Try again, or update manually from GitHub.');
+                }
+            }
 
             $archive = new ZipArchive;
             abort_unless($archive->open($zip) === true, 500, 'Downloaded zip is unreadable — try again.');

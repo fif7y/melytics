@@ -43,4 +43,7 @@ rm -f "$OUT" "$ROOT/melytics.zip"
 # self-updater both tolerate flat and legacy melytics/-prefixed layouts.
 (cd "$STAGE" && zip -qr "$OUT" .)
 cp "$OUT" "$ROOT/melytics.zip"   # stable name — deploy/melytics-installer.php fetches releases/latest/download/melytics.zip
-echo "Built $OUT ($(du -h "$OUT" | cut -f1)) + melytics.zip (attach BOTH to the GitHub release)"
+
+# Integrity checksum for the self-updater (UpdateController verifies this when present).
+( cd "$ROOT" && shasum -a 256 melytics.zip | awk '{print $1"  melytics.zip"}' > melytics.zip.sha256 )
+echo "Built $OUT ($(du -h "$OUT" | cut -f1)) + melytics.zip + melytics.zip.sha256 (attach ALL THREE to the GitHub release)"

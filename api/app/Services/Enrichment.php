@@ -14,7 +14,23 @@ class Enrichment
     {
         $salt = date('Y-m-d').config('app.key');
 
-        return substr(hash('sha256', $siteId.'|'.$request->ip().'|'.$request->userAgent().'|'.$salt), 0, 16);
+        return substr(hash('sha256', $siteId.'|'.$this->clientIp($request).'|'.$request->userAgent().'|'.$salt), 0, 16);
+    }
+
+    /**
+     * Real client IP. Prefers the proxy header named by melytics.ip_header when
+     * configured (see config note on origin-locking), else the connecting IP.
+     * Used in-memory only — never stored.
+     */
+    public function clientIp(Request $request): ?string
+    {
+        $header = config('melytics.ip_header');
+        if ($header && ($ip = $request->header($header))) {
+            // Some proxies send a comma-separated chain; the client is first.
+            return trim(explode(',', $ip)[0]);
+        }
+
+        return $request->ip();
     }
 
     public function isBot(?string $ua): bool
@@ -104,7 +120,7 @@ class Enrichment
                 static $reader = null;
                 $reader ??= new \GeoIp2\Database\Reader($mmdb);
 
-                return $reader->country($request->ip())->country->isoCode;
+                return $reader->country($this->clientIp($request))->country->isoCode;
             } catch (\Throwable) {
             }
         }

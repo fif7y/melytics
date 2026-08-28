@@ -22,6 +22,14 @@ function cssVar(name: string) {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim()
 }
 
+// Annotation text is user-authored and goes into the tooltip via innerHTML —
+// escape it so a note can never inject markup.
+function esc(s: string) {
+  const d = document.createElement('div')
+  d.textContent = s
+  return d.innerHTML
+}
+
 function build() {
   if (!el.value) return
   chart?.destroy()
@@ -158,7 +166,7 @@ function build() {
               `<span style="color:var(--ink-3)">${hourly ? d.toLocaleTimeString(undefined, { hour: 'numeric' }) : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span> ` +
               `<b>${cur.toLocaleString()}</b>` +
               (pre != null ? ` <span style="color:var(--ink-3)">vs ${pre.toLocaleString()}</span>` : '') +
-              (notes.has(days[i]) ? `<br><span style="color:var(--ink-2)">📌 ${notes.get(days[i])}</span>` : '')
+              (notes.has(days[i]) ? `<br><span style="color:var(--ink-2)">📌 ${esc(notes.get(days[i]) ?? '')}</span>` : '')
             tip.value.style.opacity = '1'
             tip.value.style.left = `${u.cursor.left}px`
           },

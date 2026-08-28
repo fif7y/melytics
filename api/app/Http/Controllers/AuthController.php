@@ -29,7 +29,7 @@ class AuthController extends Controller
         $this->sendVerification($user);
 
         return response()->json([
-            'token' => $user->createToken('dashboard')->plainTextToken,
+            'token' => $user->createToken('dashboard', ['dashboard'])->plainTextToken,
             'user' => ['id' => $user->id, 'name' => $user->name, 'email' => $user->email, 'verified' => false],
         ], 201);
     }
@@ -102,12 +102,20 @@ class AuthController extends Controller
         ]);
 
         $user = User::where('email', $data['email'])->first();
-        if (! $user || ! Hash::check($data['password'], $user->password)) {
+        if ($user) {
+            $ok = Hash::check($data['password'], $user->password);
+        } else {
+            // Run bcrypt against a dummy so response time doesn't reveal which
+            // emails exist (the hash is the dominant cost of this path).
+            Hash::check($data['password'], '$2y$12$'.str_repeat('.', 53));
+            $ok = false;
+        }
+        if (! $ok) {
             throw ValidationException::withMessages(['email' => 'Invalid credentials.']);
         }
 
         return response()->json([
-            'token' => $user->createToken('dashboard')->plainTextToken,
+            'token' => $user->createToken('dashboard', ['dashboard'])->plainTextToken,
             'user' => ['id' => $user->id, 'name' => $user->name, 'email' => $user->email, 'verified' => (bool) $user->email_verified_at],
         ]);
     }
@@ -118,7 +126,7 @@ class AuthController extends Controller
         $user = $request->user();
         $user->tokens()->where('name', 'mcp')->delete();
 
-        return response()->json(['token' => $user->createToken('mcp')->plainTextToken]);
+        return response()->json(['token' => $user->createToken('mcp', ['mcp'])->plainTextToken]);
     }
 
     public function logout(Request $request): JsonResponse

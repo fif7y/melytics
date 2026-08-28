@@ -20,17 +20,26 @@ class IngestController extends Controller
             'w' => 'nullable|integer|min:0|max:20000',
             'z' => 'nullable|string|max:64',
             'e' => 'nullable|string|max:64',
-            'p' => 'nullable|array',
+            'p' => 'nullable|array|max:50',
             'i' => 'nullable|alpha_num|max:32',
         ]);
 
-        [$siteId, $tier2] = Cache::remember(
-            'site2:'.$data['k'], // key bumped: value shape changed from scalar id to [id, tier2]
+        // The site key is public (it ships in the tracker <script>), so a beacon
+        // is only as trustworthy as its payload. Bound the custom-event props:
+        // every other field is length-capped, but a raw array could be a
+        // megabytes-deep blob that bloats event_props and slows JSON queries.
+        $props = $data['p'] ?? null;
+        if ($props !== null && strlen(json_encode($props)) > 4096) {
+            $props = null; // keep the pageview/event; drop the oversized payload
+        }
+
+        [$siteId, $tier2, $domain] = Cache::remember(
+            'site3:'.$data['k'], // key bumped: value shape now [id, tier2, domain]
             300,
             function () use ($data) {
-                $site = Site::where('key', $data['k'])->first(['id', 'tier2_enabled']);
+                $site = Site::where('key', $data['k'])->first(['id', 'tier2_enabled', 'domain']);
 
-                return $site ? [$site->id, $site->tier2_enabled] : [0, false];
+                return $site ? [$site->id, $site->tier2_enabled, $site->domain] : [0, false, null];
             }
         );
         if (! $siteId) {
@@ -42,6 +51,16 @@ class IngestController extends Controller
         $event = $data['e'] ?? null;
         if ($enrich->isBot($ua)) {
             $this->logBot($siteId, $enrich->botName($ua), $url['path'] ?? '/', $event);
+
+            return response()->noContent();
+        }
+
+        // Beacon host must match the site's registered domain (or a subdomain).
+        // Blocks trivial cross-site poisoning with a scraped key. Mismatches are
+        // parked in bot_hits ('Foreign domain') rather than dropped, so a real
+        // domain misconfig is visible on the Bots card instead of silent.
+        if (! $this->hostAllowed($url['host'] ?? null, $domain)) {
+            $this->logBot($siteId, 'Foreign domain', $url['path'] ?? '/', $event);
 
             return response()->noContent();
         }
@@ -81,7 +100,7 @@ class IngestController extends Controller
             'os' => $parsed['os'],
             'screen_w' => $data['w'] ?? null,
             'event' => $data['e'] ?? null,
-            'event_props' => $data['p'] ?? null,
+            'event_props' => $props,
             // key omitted entirely unless consented, so inserts still work pre-migration
         ] + ($tier2 && ! empty($data['i']) ? ['visitor_id' => $data['i']] : []));
 
@@ -100,9 +119,28 @@ class IngestController extends Controller
             return;
         }
         try {
-            \App\Models\BotHit::create(['site_id' => $siteId, 'name' => $name, 'path' => substr($path, 0, 512)]);
+            \App\Models\BotHit::create(['site_id' => $siteId, 'name' => substr($name, 0, 64), 'path' => substr($path, 0, 512)]);
         } catch (\Throwable) {
         }
+    }
+
+    /**
+     * Does a beacon's URL host belong to this site? Matches the registered
+     * domain or any subdomain of it, ignoring a leading "www." on either side.
+     * Permissive when the host or domain is unknown (older sites have no domain,
+     * pixel fallbacks carry no host) — this raises the cost of poisoning, it is
+     * not an auth boundary a determined spoofer can't forge a Host past.
+     */
+    private function hostAllowed(?string $host, ?string $domain): bool
+    {
+        if (! $host || ! $domain) {
+            return true;
+        }
+        $strip = fn (string $h) => preg_replace('/^www\./i', '', strtolower($h));
+        $host = $strip($host);
+        $domain = $strip($domain);
+
+        return $host === $domain || str_ends_with($host, '.'.$domain);
     }
 
     /** <noscript> 1px gif fallback: GET /api/echo.gif?k=...&u=... */

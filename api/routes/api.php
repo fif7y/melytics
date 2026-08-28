@@ -15,8 +15,8 @@ use App\Http\Controllers\UpdateController;
 use Illuminate\Support\Facades\Route;
 
 // Ingest — neutral naming on purpose (ad-blocker lists match on keywords).
-Route::post('/echo', IngestController::class);
-Route::get('/echo.gif', [IngestController::class, 'pixel']);
+Route::post('/echo', IngestController::class)->middleware('throttle:ingest');
+Route::get('/echo.gif', [IngestController::class, 'pixel'])->middleware('throttle:ingest');
 
 // What the login screen may offer on this instance (unauthenticated by design).
 Route::get('/auth/config', fn () => [
@@ -29,11 +29,11 @@ Route::get('/auth/config', fn () => [
 Route::post('/mcp/{token?}', [McpController::class, 'handle'])->middleware('throttle:120,1');
 Route::match(['get', 'delete'], '/mcp/{token?}', [McpController::class, 'reject']);
 
-Route::post('/auth/login', [AuthController::class, 'login'])->middleware('throttle:10,1');
+Route::post('/auth/login', [AuthController::class, 'login'])->middleware('throttle:login');
 Route::get('/auth/google/redirect', [GoogleAuthController::class, 'redirect'])->middleware('throttle:10,1');
 Route::get('/auth/google/callback', [GoogleAuthController::class, 'callback'])->middleware('throttle:10,1');
 Route::post('/auth/register', [AuthController::class, 'register'])->middleware('throttle:5,1');
-Route::post('/auth/forgot', [AuthController::class, 'forgot'])->middleware('throttle:5,1');
+Route::post('/auth/forgot', [AuthController::class, 'forgot'])->middleware('throttle:login');
 Route::post('/auth/reset', [AuthController::class, 'reset'])->middleware('throttle:5,1');
 Route::get('/auth/verify/{id}/{hash}', [AuthController::class, 'verify'])
     ->middleware(['signed', 'throttle:10,1'])->name('verification.verify');
