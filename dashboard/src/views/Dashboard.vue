@@ -240,6 +240,7 @@ async function load(silent = false) {
   ]
   const r = await api<{
     stats: Stats
+    update?: { latest: string; url: string } | null
     annotations: Annotation[]
     goals: GoalRow[] | null
     funnels: FunnelRow[] | null
@@ -259,6 +260,8 @@ async function load(silent = false) {
   })
   if (gen !== loadGen) return
   stats.value = r.stats
+  // pre-v0.3.8 APIs omit the key entirely — leave /auth/me's answer alone then
+  if (r.update !== undefined && me.value) me.value = { ...me.value, update: r.update }
   annotations.value = r.annotations
   goals.value = r.goals ?? []
   funnels.value = r.funnels ?? []

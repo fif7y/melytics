@@ -49,6 +49,9 @@ class StatsController extends Controller
 
         return response()->json([
             'stats' => $this->stats->overview($site, $from, $to, $interval, $filter),
+            // Cached 12h (Version::latest) — lets the 60s silent refresh surface
+            // the update banner without waiting for a full page reload (/auth/me).
+            'update' => \App\Support\Version::updateAvailable(),
             'annotations' => $annotations,
             'goals' => $on('goals') ? $this->stats->goals($site, $from, $to) : null,
             'funnels' => $on('funnels') ? $site->funnels->map(fn ($f) => [
