@@ -399,8 +399,10 @@ async function logout() {
 
 <template>
   <div class="mx-auto max-w-6xl px-5 py-6">
-    <!-- Three groups: identity/context left, range centered, config right -->
-    <header class="mb-8 grid items-center gap-x-3 gap-y-2 md:grid-cols-[1fr_auto_1fr]">
+    <!-- Three groups: identity/context left, range centered, config right.
+         Sticky: frosted low-alpha bg + blur (de-box, no border), bleeds over the
+         container padding so content never peeks at the edges. -->
+    <header class="sticky-header sticky top-0 z-20 -mx-5 -mt-6 mb-8 grid items-center gap-x-3 gap-y-2 px-5 pt-6 pb-3 md:grid-cols-[1fr_auto_1fr]">
       <div class="flex flex-wrap items-center gap-3">
         <div class="flex items-baseline gap-3">
         <h1 class="text-lg font-semibold tracking-tight">melytics</h1>
@@ -744,6 +746,13 @@ async function logout() {
 </template>
 
 <style scoped>
+/* Frosted sticky header — low-alpha bg token + blur so both modes come free */
+.sticky-header {
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
+  backdrop-filter: blur(14px) saturate(1.4);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+}
+
 /* FLIP move when grid cards reflow after a toggle or reorder; entering/leaving
    cards fade instead of popping (leave goes absolute so neighbors glide at once) */
 .mods-move,
