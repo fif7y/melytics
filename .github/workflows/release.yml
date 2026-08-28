@@ -1,0 +1,52 @@
+name: Release
+
+# Push a version tag and this builds the bundle and publishes the GitHub release
+# with all three assets — no local build, no manual `gh release create`:
+#   git tag -a v0.4.1 -m "release notes here" && git push --tags
+# The annotated tag's message becomes the release notes (falls back to
+# auto-generated notes for a lightweight tag).
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # need the annotated tag object for its message
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          tools: composer
+          extensions: pdo_sqlite, sqlite3
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Build release bundle
+        run: bash deploy/build-release.sh "${GITHUB_REF_NAME#v}"
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          NOTES="$(git tag -l --format='%(contents)' "$GITHUB_REF_NAME")"
+          ARGS=(--title "$GITHUB_REF_NAME")
+          if [ -n "$NOTES" ]; then ARGS+=(--notes "$NOTES"); else ARGS+=(--generate-notes); fi
+          gh release create "$GITHUB_REF_NAME" "${ARGS[@]}" \
+            "melytics-${VERSION}.zip" melytics.zip melytics.zip.sha256

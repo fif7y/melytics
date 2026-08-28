@@ -27,7 +27,7 @@ mkdir -p "$STAGE/public/app"
 rsync -a "$ROOT/dashboard/dist/" "$STAGE/public/app/"
 
 echo "→ tracker build"
-(cd "$ROOT/tracker" && npx esbuild src/m.js --minify --format=iife --outfile="$STAGE/public/m.js" --log-level=warning)
+(cd "$ROOT/tracker" && npm ci --silent && npx esbuild src/m.js --minify --format=iife --outfile="$STAGE/public/m.js" --log-level=warning)
 
 echo "→ release .env + root .htaccess + VERSION"
 cp "$ROOT/deploy/release-env-template" "$STAGE/.env"
@@ -45,5 +45,6 @@ rm -f "$OUT" "$ROOT/melytics.zip"
 cp "$OUT" "$ROOT/melytics.zip"   # stable name — deploy/melytics-installer.php fetches releases/latest/download/melytics.zip
 
 # Integrity checksum for the self-updater (UpdateController verifies this when present).
-( cd "$ROOT" && shasum -a 256 melytics.zip | awk '{print $1"  melytics.zip"}' > melytics.zip.sha256 )
+# Portable across macOS (shasum) and Linux/CI (sha256sum).
+( cd "$ROOT" && { command -v sha256sum >/dev/null 2>&1 && sha256sum melytics.zip || shasum -a 256 melytics.zip; } | awk '{print $1"  melytics.zip"}' > melytics.zip.sha256 )
 echo "Built $OUT ($(du -h "$OUT" | cut -f1)) + melytics.zip + melytics.zip.sha256 (attach ALL THREE to the GitHub release)"
