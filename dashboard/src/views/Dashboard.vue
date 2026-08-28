@@ -214,7 +214,8 @@ const filterLabel = computed(() => {
 let loadGen = 0
 let inflightKey = ''
 
-async function load() {
+// silent = background refresh: update data in place, never flash the spinner
+async function load(silent = false) {
   if (!siteId.value) {
     loading.value = false
     return
@@ -222,7 +223,7 @@ async function load() {
   const key = `${siteId.value}|${rangeParams()}|${filterQS()}`
   if (key === inflightKey) return
   inflightKey = key
-  loading.value = true
+  if (!silent) loading.value = true
   const gen = ++loadGen
   const id = siteId.value
   // hidden modules are not fetched at all (funnels especially are heavier queries).
@@ -295,9 +296,13 @@ watch(siteId, () => {
 })
 
 let liveTimer: ReturnType<typeof setInterval>
+let dashTimer: ReturnType<typeof setInterval>
 
 function onVisible() {
-  if (!document.hidden) pollLive()
+  if (document.hidden) return
+  // catch up after time away: fresh live numbers + a quiet data refresh
+  pollLive()
+  load(true)
 }
 
 onMounted(async () => {
@@ -306,6 +311,11 @@ onMounted(async () => {
   await load()
   await pollLive(true)
   liveTimer = setInterval(pollLive, 15_000)
+  // Rollups land once a minute (cron), so a faster refresh can't show newer
+  // data — 60s, visible tabs only, updating in place with no spinner.
+  dashTimer = setInterval(() => {
+    if (!document.hidden) load(true)
+  }, 60_000)
 })
 
 const me = ref<Me | null>(null)
@@ -391,10 +401,12 @@ async function deleteSite() {
 }
 onBeforeUnmount(() => {
   clearInterval(liveTimer)
+  clearInterval(dashTimer)
   document.removeEventListener('visibilitychange', onVisible)
 })
 
-watch([siteId, rangeDays, filter, customRange], load)
+// explicit closure: the watcher's (new, old) args must not land in load(silent)
+watch([siteId, rangeDays, filter, customRange], () => load())
 
 async function addNote() {
   if (!noteText.value || !siteId.value) return
@@ -514,7 +526,7 @@ async function logout() {
       </div>
     </header>
 
-    <SetupWizard v-if="siteId" ref="wizard" :site-id="siteId" :has-goals="goals.length > 0" :targets="targets" @created="load" />
+    <SetupWizard v-if="siteId" ref="wizard" :site-id="siteId" :has-goals="goals.length > 0" :targets="targets" @created="() => load()" />
 
     <Teleport to="body">
       <div v-if="pickingRange" class="fixed inset-0 z-50 grid place-items-center bg-black/25 p-6" @click.self="pickingRange = false" @keydown.esc="pickingRange = false">
@@ -724,8 +736,8 @@ async function logout() {
             @dragleave="overKey === k && (overKey = null)"
             @drop.prevent="dropOn(k)"
           >
-            <GoalsCard v-if="k === 'goals'" class="h-full" :site-id="siteId" :goals="goals" :targets="targets" @changed="load" @assist="wizard?.show(goals.length ? 1 : 0)" />
-            <FunnelsCard v-else class="h-full" :site-id="siteId" :funnels="funnels" :targets="targets" @changed="load" @assist="wizard?.show(2)" />
+            <GoalsCard v-if="k === 'goals'" class="h-full" :site-id="siteId" :goals="goals" :targets="targets" @changed="() => load()" @assist="wizard?.show(goals.length ? 1 : 0)" />
+            <FunnelsCard v-else class="h-full" :site-id="siteId" :funnels="funnels" :targets="targets" @changed="() => load()" @assist="wizard?.show(2)" />
           </div>
         </template>
       </div>
