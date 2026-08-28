@@ -16,7 +16,11 @@ class GoalController extends Controller
             'name' => 'required|string|max:255',
             'event' => 'nullable|string|max:64|required_without:path_pattern',
             'path_pattern' => 'nullable|string|max:512|required_without:event',
+            // event_props key to sum for revenue; interpolated into a JSON path, so charset-locked
+            'value_prop' => ['nullable', 'regex:/^[A-Za-z0-9_-]{1,64}$/'],
         ]);
+        // Revenue only applies to event goals.
+        $data['value_prop'] = ! empty($data['event']) ? ($data['value_prop'] ?? null) : null;
 
         return response()->json($site->goals()->create($data), 201);
     }
@@ -29,9 +33,15 @@ class GoalController extends Controller
             'name' => 'required|string|max:255',
             'event' => 'nullable|string|max:64|required_without:path_pattern',
             'path_pattern' => 'nullable|string|max:512|required_without:event',
+            'value_prop' => ['nullable', 'regex:/^[A-Za-z0-9_-]{1,64}$/'],
         ]);
-        // switching type clears the other target column
-        $goal->update(['name' => $data['name'], 'event' => $data['event'] ?? null, 'path_pattern' => $data['path_pattern'] ?? null]);
+        // switching type clears the other target column; value_prop is event-only
+        $goal->update([
+            'name' => $data['name'],
+            'event' => $data['event'] ?? null,
+            'path_pattern' => $data['path_pattern'] ?? null,
+            'value_prop' => ! empty($data['event']) ? ($data['value_prop'] ?? null) : null,
+        ]);
 
         return response()->json(['ok' => true]);
     }

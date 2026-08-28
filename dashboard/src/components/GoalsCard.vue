@@ -8,8 +8,11 @@ export interface GoalRow {
   name: string
   event: string | null
   path_pattern: string | null
+  value_prop?: string | null
   conversions: number
   rate: number
+  revenue?: number | null
+  avg?: number | null
 }
 
 const props = defineProps<{ siteId: number; goals: GoalRow[]; targets?: { pages: string[]; events: string[] } }>()
@@ -18,7 +21,11 @@ const emit = defineEmits<{ changed: []; assist: [] }>()
 const adding = ref(false)
 const name = ref('')
 const target = ref('')
+const valueProp = ref('')
 const busy = ref(false)
+
+const isEvent = (t: string) => !!t && !t.startsWith('/')
+const num = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits: 2 })
 
 // Picking a real target auto-names the goal (still editable)
 function suggestName() {
@@ -38,10 +45,12 @@ async function add() {
       body: JSON.stringify({
         name: name.value,
         [isPath ? 'path_pattern' : 'event']: target.value,
+        ...(!isPath && valueProp.value ? { value_prop: valueProp.value } : {}),
       }),
     })
     name.value = ''
     target.value = ''
+    valueProp.value = ''
     adding.value = false
     emit('changed')
   } finally {
@@ -52,11 +61,13 @@ async function add() {
 const editingId = ref<number | null>(null)
 const editName = ref('')
 const editTarget = ref('')
+const editValueProp = ref('')
 
 function startEdit(g: GoalRow) {
   editingId.value = g.id
   editName.value = g.name
   editTarget.value = g.event ?? g.path_pattern ?? ''
+  editValueProp.value = g.value_prop ?? ''
 }
 
 async function saveEdit() {
@@ -66,7 +77,11 @@ async function saveEdit() {
   try {
     await api(`/sites/${props.siteId}/goals/${editingId.value}`, {
       method: 'PATCH',
-      body: JSON.stringify({ name: editName.value, [isPath ? 'path_pattern' : 'event']: editTarget.value }),
+      body: JSON.stringify({
+        name: editName.value,
+        [isPath ? 'path_pattern' : 'event']: editTarget.value,
+        value_prop: !isPath ? editValueProp.value || null : null,
+      }),
     })
     editingId.value = null
     emit('changed')
@@ -109,12 +124,19 @@ async function remove(id: number) {
       </button>
     </div>
 
-    <form v-if="adding" class="flex gap-2 mb-4" @submit.prevent="add">
+    <form v-if="adding" class="flex flex-wrap gap-2 mb-4" @submit.prevent="add">
       <TargetPicker v-model="target" :targets="targets" placeholder="Pick a page or event, or type your own" @picked="suggestName" />
       <input
         v-model="name"
         placeholder="Name"
         class="w-36 rounded-lg px-3 py-1.5 text-sm bg-[var(--bg)] outline-none focus:ring-2 ring-[var(--accent)] placeholder:text-[var(--ink-3)]"
+      />
+      <input
+        v-if="isEvent(target)"
+        v-model="valueProp"
+        placeholder="value prop"
+        title="Optional: sum this numeric event property as revenue (e.g. value)"
+        class="w-28 rounded-lg px-3 py-1.5 text-sm bg-[var(--bg)] outline-none focus:ring-2 ring-[var(--accent)] placeholder:text-[var(--ink-3)]"
       />
       <button :disabled="busy" class="rounded-lg px-3 py-1.5 text-sm text-white bg-[var(--accent)] disabled:opacity-50">Save</button>
     </form>
@@ -126,20 +148,32 @@ async function remove(id: number) {
 
     <ul class="space-y-1.5">
       <li v-for="g in goals" :key="g.id" class="group flex items-baseline gap-3 rounded-md px-2.5 py-1.5">
-        <form v-if="editingId === g.id" class="flex flex-1 gap-2" @submit.prevent="saveEdit">
+        <form v-if="editingId === g.id" class="flex flex-1 flex-wrap gap-2" @submit.prevent="saveEdit">
           <input
             v-model="editName"
             placeholder="Name"
             class="w-28 rounded-lg px-3 py-1.5 text-sm bg-[var(--bg)] outline-none focus:ring-2 ring-[var(--accent)]"
           />
           <TargetPicker v-model="editTarget" :targets="targets" placeholder="Pick a page or event, or type your own" />
+          <input
+            v-if="isEvent(editTarget)"
+            v-model="editValueProp"
+            placeholder="value prop"
+            title="Optional: sum this numeric event property as revenue"
+            class="w-24 rounded-lg px-3 py-1.5 text-sm bg-[var(--bg)] outline-none focus:ring-2 ring-[var(--accent)]"
+          />
           <button :disabled="busy" class="rounded-lg px-3 py-1.5 text-sm text-white bg-[var(--accent)] disabled:opacity-50">Save</button>
           <button type="button" class="rounded-lg px-2 py-1.5 text-sm text-[var(--ink-3)]" @click="editingId = null">Cancel</button>
         </form>
         <template v-else>
           <span class="text-sm">{{ g.name }}</span>
           <span class="text-xs text-[var(--ink-3)]">{{ g.event ?? g.path_pattern }}</span>
-          <span class="ml-auto text-sm tabular-nums">{{ g.conversions.toLocaleString() }}</span>
+          <span
+            v-if="g.revenue != null"
+            class="ml-auto text-sm tabular-nums font-medium text-[var(--accent)]"
+            :title="g.avg != null ? `avg ${num(g.avg)} per conversion · sums '${g.value_prop}'` : undefined"
+          >{{ num(g.revenue) }}</span>
+          <span class="text-sm tabular-nums" :class="{ 'ml-auto': g.revenue == null }">{{ g.conversions.toLocaleString() }}</span>
           <span class="text-sm tabular-nums text-[var(--ink-2)] w-14 text-right">{{ g.rate }}%</span>
           <button
             class="-my-1 flex h-7 w-7 items-center justify-center self-center rounded-md text-[var(--ink-3)] opacity-60 transition-opacity hover:bg-[var(--bg)] hover:text-[var(--ink)] group-hover:opacity-100"

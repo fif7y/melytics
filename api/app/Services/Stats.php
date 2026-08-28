@@ -246,15 +246,28 @@ class Stats
                 $q->whereNull('event');
                 self::pathMatch($q, $goal->path_pattern);
             }
-            $conversions = $q->distinct()->count('visitor_hash');
+            $conversions = (clone $q)->distinct()->count('visitor_hash');
+
+            // Revenue = sum of the goal's numeric value prop over every matching
+            // event hit (total money), with avg per converting visitor. The key
+            // was charset-validated on write; re-checked here before it hits SQL.
+            $revenue = $avg = null;
+            if ($goal->event && $goal->value_prop && preg_match('/^[A-Za-z0-9_-]{1,64}$/', $goal->value_prop)) {
+                $expr = SqlDialect::jsonNum($goal->value_prop);
+                $revenue = (float) (clone $q)->selectRaw("COALESCE(SUM($expr), 0) as s")->value('s');
+                $avg = $conversions ? round($revenue / $conversions, 2) : null;
+            }
 
             return [
                 'id' => $goal->id,
                 'name' => $goal->name,
                 'event' => $goal->event,
                 'path_pattern' => $goal->path_pattern,
+                'value_prop' => $goal->value_prop,
                 'conversions' => $conversions,
                 'rate' => round($conversions / $visitors * 100, 1),
+                'revenue' => $revenue,
+                'avg' => $avg,
             ];
         })->all();
     }

@@ -6,5 +6,5 @@ use Illuminate\Database\Eloquent\Model;
 
 class Goal extends Model
 {
-    protected $fillable = ['name', 'event', 'path_pattern'];
+    protected $fillable = ['name', 'event', 'path_pattern', 'value_prop'];
 }
