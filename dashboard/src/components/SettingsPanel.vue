@@ -1,54 +1,124 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, TransitionGroup } from 'vue'
-import Toggle from './Toggle.vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { api, type Site } from '../lib/api'
 
-export interface ModuleDef {
-  key: string
-  label: string
-  tier2?: boolean
-}
-
-const props = defineProps<{ modules: ModuleDef[]; hidden: string[]; density: 'comfy' | 'compact'; tier2: boolean }>()
+const props = defineProps<{ site: Site | null }>()
 const emit = defineEmits<{
-  toggle: [key: string]
-  density: [d: 'comfy' | 'compact']
-  tier2: [on: boolean]
-  reorder: [from: string, to: string]
+  addSite: [payload: { name: string; domain: string }]
+  deleteSite: []
 }>()
 
 const open = ref(false)
 
-// Mirror the dashboard layout exactly: goals/funnels are their own row
-// (swappable pair); the grid shows only the modules that are actually on the
-// view, in view order, so the panel stays a mini-map when things toggle off.
-// Off modules drop into their own group below; tier-2 modules sit in a locked
-// group while tier-2 tracking is disabled (they can't render anyway).
-const rowModules = computed(() => props.modules.filter((m) => m.key === 'goals' || m.key === 'funnels'))
-const gridModules = computed(() => props.modules.filter((m) => m.key !== 'goals' && m.key !== 'funnels'))
-const isOn = (m: ModuleDef) => !props.hidden.includes(m.key)
-// One grid, one TransitionGroup: actives first in view order (the mini-map),
-// off modules sink to the tail — toggling FLIP-animates the card to its spot.
-const sortedGrid = computed(() => {
-  const eligible = gridModules.value.filter((m) => !m.tier2 || props.tier2)
-  return [...eligible.filter(isOn), ...eligible.filter((m) => !isOn(m))]
-})
-const tier2Locked = computed(() => (props.tier2 ? [] : gridModules.value.filter((m) => m.tier2)))
-
-// Drag-to-reorder, same order store as the dashboard grid. Drags stay within
-// their group (goals/funnels row vs grid) so the layout never lies.
-const dragKey = ref<string | null>(null)
-const dragGroup = ref<'row' | 'base' | null>(null)
-const overKey = ref<string | null>(null)
-
-function startDrag(key: string, group: 'row' | 'base') {
-  dragKey.value = key
-  dragGroup.value = group
+const snippet = computed(() =>
+  props.site
+    ? `<script defer data-site="${props.site.key}" data-api="${location.origin}/api/echo" src="${location.origin}/m.js"><\/script>`
+    : ''
+)
+const copied = ref(false)
+async function copySnippet() {
+  try {
+    await navigator.clipboard.writeText(snippet.value)
+    copied.value = true
+    setTimeout(() => (copied.value = false), 1500)
+  } catch {}
 }
-function dropOn(key: string, group: 'row' | 'base') {
-  if (dragKey.value && dragGroup.value === group && dragKey.value !== key) emit('reorder', dragKey.value, key)
-  dragKey.value = null
-  dragGroup.value = null
-  overKey.value = null
+
+const adding = ref(false)
+const newName = ref('')
+const newDomain = ref('')
+function submitSite() {
+  if (!newName.value || !newDomain.value) return
+  emit('addSite', { name: newName.value, domain: newDomain.value })
+  adding.value = false
+  newName.value = ''
+  newDomain.value = ''
+}
+
+// Google sign-in — guided in-app setup (admin pastes the two OAuth values,
+// the API persists them; no .env editing, no deploy guide).
+const googleOn = ref<boolean | null>(null)
+const gSetup = ref(false)
+const gClientId = ref('')
+const gSecret = ref('')
+const gBusy = ref(false)
+const gError = ref('')
+const gCopied = ref(false)
+const redirectUri = `${window.MELYTICS_API ?? location.origin + '/api'}/auth/google/callback`
+
+onMounted(async () => {
+  try {
+    googleOn.value = (await api<{ google: boolean }>('/auth/config')).google
+  } catch {}
+})
+
+async function copyRedirect() {
+  try {
+    await navigator.clipboard.writeText(redirectUri)
+    gCopied.value = true
+    setTimeout(() => (gCopied.value = false), 1500)
+  } catch {}
+}
+
+async function saveGoogle() {
+  gBusy.value = true
+  gError.value = ''
+  try {
+    await api('/auth/google/settings', {
+      method: 'PUT',
+      body: JSON.stringify({ client_id: gClientId.value.trim(), client_secret: gSecret.value.trim() }),
+    })
+    googleOn.value = true
+    gSetup.value = false
+    gClientId.value = ''
+    gSecret.value = ''
+  } catch (e) {
+    gError.value = e instanceof Error ? e.message : 'Could not save'
+  } finally {
+    gBusy.value = false
+  }
+}
+
+async function disableGoogle() {
+  gBusy.value = true
+  gError.value = ''
+  try {
+    await api('/auth/google/settings', { method: 'DELETE' })
+    googleOn.value = false
+  } catch (e) {
+    gError.value = e instanceof Error ? e.message : 'Could not save'
+  } finally {
+    gBusy.value = false
+  }
+}
+
+// MCP connector — one token per user; regenerating revokes the previous one.
+const mcpSetup = ref(false)
+const mcpUrl = ref('')
+const mcpBusy = ref(false)
+const mcpError = ref('')
+const mcpCopied = ref(false)
+
+async function generateMcp() {
+  mcpBusy.value = true
+  mcpError.value = ''
+  try {
+    const { token } = await api<{ token: string }>('/auth/mcp-token', { method: 'POST' })
+    // Sanctum tokens contain "|" — encode so the URL is valid for strict clients
+    mcpUrl.value = `${window.MELYTICS_API ?? location.origin + '/api'}/mcp/${encodeURIComponent(token)}`
+  } catch (e) {
+    mcpError.value = e instanceof Error ? e.message : 'Could not generate'
+  } finally {
+    mcpBusy.value = false
+  }
+}
+
+async function copyMcp() {
+  try {
+    await navigator.clipboard.writeText(mcpUrl.value)
+    mcpCopied.value = true
+    setTimeout(() => (mcpCopied.value = false), 1500)
+  } catch {}
 }
 
 function onKey(e: KeyboardEvent) {
@@ -61,15 +131,13 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey))
 <template>
   <button
     class="flex h-9 w-9 items-center justify-center rounded-lg text-[var(--ink-2)] hover:bg-[var(--surface)] hover:text-[var(--ink)]"
-    title="Modules"
-    aria-label="Modules"
+    title="Settings"
+    aria-label="Settings"
     @click="open = true"
   >
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-      <rect x="3" y="3" width="7" height="7" rx="1.5" />
-      <rect x="14" y="3" width="7" height="7" rx="1.5" />
-      <rect x="3" y="14" width="7" height="7" rx="1.5" />
-      <rect x="14" y="14" width="7" height="7" rx="1.5" />
+      <path d="M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3" />
+      <path d="M14 2v4M8 10v4M16 18v4" />
     </svg>
   </button>
 
@@ -82,14 +150,14 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey))
         v-if="open"
         class="fixed right-0 top-0 z-40 flex h-full w-80 max-w-[85vw] flex-col bg-[var(--surface)] shadow-2xl lg:w-[30rem]"
         role="dialog"
-        aria-label="Modules"
+        aria-label="Settings"
       >
-        <div class="flex items-center px-5 pt-5 pb-4">
-          <h2 class="text-sm font-semibold">Modules</h2>
+        <div class="flex items-center px-6 pt-6 pb-5">
+          <h2 class="text-sm font-semibold">Settings</h2>
           <button
             class="ml-auto flex h-8 w-8 items-center justify-center rounded-lg text-[var(--ink-3)] hover:bg-[var(--bg)] hover:text-[var(--ink)]"
             title="Close"
-            aria-label="Close modules panel"
+            aria-label="Close settings panel"
             @click="open = false"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
@@ -98,99 +166,163 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey))
           </button>
         </div>
 
-        <div class="flex-1 space-y-6 overflow-y-auto px-5 pb-5">
+        <div class="flex-1 space-y-8 overflow-y-auto px-6 pb-6">
           <section>
-            <div class="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--ink-3)]">Activate &amp; reorder</div>
-            <!-- Same shape as the dashboard: goals/funnels row, then the grid, same breakpoints -->
-            <div class="mb-3 grid grid-cols-1 gap-x-2 gap-y-3 lg:grid-cols-2">
-              <button
-                v-for="m in rowModules"
-                :key="m.key"
-                draggable="true"
-                class="module-card"
-                :class="{
-                  on: !props.hidden.includes(m.key),
-                  'opacity-40': dragKey === m.key,
-                  'ring-2 ring-[var(--accent)]': overKey === m.key && dragKey && dragKey !== m.key,
-                }"
-                :aria-pressed="!props.hidden.includes(m.key)"
-                @click="emit('toggle', m.key)"
-                @dragstart="startDrag(m.key, 'row')"
-                @dragend=";(dragKey = null), (overKey = null)"
-                @dragover.prevent="overKey = m.key"
-                @dragleave="overKey === m.key && (overKey = null)"
-                @drop.prevent="dropOn(m.key, 'row')"
-              >
-                <span class="truncate">{{ m.label }}</span>
-                <span class="switch"><span class="knob" /></span>
+            <div class="mb-2.5 text-xs font-medium uppercase tracking-wide text-[var(--ink-3)]">AI assistants</div>
+            <div class="flex items-center justify-between px-2 py-1 text-sm">
+              <span>Ask AI about your stats</span>
+              <button class="text-xs text-[var(--accent)]" @click="mcpSetup = !mcpSetup">
+                {{ mcpSetup ? 'Hide setup' : 'Set up' }}
               </button>
             </div>
-            <TransitionGroup tag="div" name="mods" class="relative grid grid-cols-1 gap-x-2 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
-              <button
-                v-for="m in sortedGrid"
-                :key="m.key"
-                :draggable="isOn(m)"
-                class="module-card"
-                :class="{
-                  on: isOn(m),
-                  'opacity-40': dragKey === m.key,
-                  'ring-2 ring-[var(--accent)]': overKey === m.key && dragKey && dragKey !== m.key,
-                }"
-                :aria-pressed="isOn(m)"
-                @click="emit('toggle', m.key)"
-                @dragstart="isOn(m) && startDrag(m.key, 'base')"
-                @dragend=";(dragKey = null), (overKey = null)"
-                @dragover.prevent="isOn(m) && (overKey = m.key)"
-                @dragleave="overKey === m.key && (overKey = null)"
-                @drop.prevent="isOn(m) && dropOn(m.key, 'base')"
-              >
-                <span class="truncate">{{ m.label }}</span>
-                <span class="switch"><span class="knob" /></span>
-              </button>
-            </TransitionGroup>
-            <p class="mt-2 px-1 text-xs text-[var(--ink-3)]">Tap to turn a module on or off — off modules sink to the end and aren't fetched at all. Drag to reorder; this is your dashboard's layout.</p>
 
-            <template v-if="tier2Locked.length">
-              <div class="mt-4 mb-2 px-1 text-xs text-[var(--ink-3)]">Needs Tier-2 tracking — enable it under Privacy</div>
-              <div class="grid grid-cols-1 gap-x-2 gap-y-3 opacity-50 sm:grid-cols-2 lg:grid-cols-3">
+            <div v-if="mcpSetup" class="mt-2 space-y-3 rounded-lg bg-[var(--bg)] p-4 text-xs text-[var(--ink-2)]">
+              <p>
+                Connect Claude — or any MCP-capable assistant — to this dashboard, then just ask:
+                <span class="italic">“how was traffic this week?”</span>
+              </p>
+              <button
+                v-if="!mcpUrl"
+                class="w-full rounded-md bg-[var(--accent)] py-1.5 font-medium text-white disabled:opacity-50"
+                :disabled="mcpBusy"
+                @click="generateMcp"
+              >Generate connector URL</button>
+              <template v-else>
+                <div>
+                  <button
+                    class="w-full rounded-md bg-[var(--surface)] px-2.5 py-2 text-left font-mono text-[10px] break-all hover:ring-1 ring-[var(--accent)]"
+                    :title="mcpCopied ? 'Copied' : 'Click to copy'"
+                    @click="copyMcp"
+                  >{{ mcpUrl }}</button>
+                  <p class="mt-0.5" :class="mcpCopied ? 'text-[var(--accent)]' : 'text-[var(--ink-3)]'">{{ mcpCopied ? 'Copied.' : 'Click to copy.' }}</p>
+                </div>
+                <p>
+                  In Claude: <span class="font-medium text-[var(--ink)]">Settings → Connectors → Add custom connector</span>,
+                  paste the URL. Done — Claude can now read your stats.
+                </p>
+                <p class="text-[var(--ink-3)]">
+                  The URL contains a secret — treat it like a password. Generating a new one revokes this one.
+                </p>
+              </template>
+              <p v-if="mcpError" class="text-[var(--down)]">{{ mcpError }}</p>
+            </div>
+          </section>
+
+          <section v-if="googleOn !== null">
+            <div class="mb-2.5 text-xs font-medium uppercase tracking-wide text-[var(--ink-3)]">Sign-in</div>
+            <div class="flex items-center justify-between px-2 py-1 text-sm">
+              <span>Google sign-in</span>
+              <button
+                v-if="googleOn"
+                class="text-xs text-[var(--ink-3)] hover:text-[var(--down)]"
+                :disabled="gBusy"
+                @click="disableGoogle"
+              >On · turn off</button>
+              <button
+                v-else
+                class="text-xs text-[var(--accent)]"
+                @click="gSetup = !gSetup"
+              >{{ gSetup ? 'Hide setup' : 'Off · set up' }}</button>
+            </div>
+
+            <div v-if="gSetup && !googleOn" class="mt-2 space-y-3 rounded-lg bg-[var(--bg)] p-4 text-xs text-[var(--ink-2)]">
+              <p>
+                <span class="font-medium text-[var(--ink)]">1 ·</span>
+                <a
+                  class="text-[var(--accent)] underline-offset-2 hover:underline"
+                  href="https://console.cloud.google.com/apis/credentials/oauthclient"
+                  target="_blank" rel="noopener"
+                >Create an OAuth client at Google</a>
+                — choose type <span class="font-medium">Web application</span> (free, ~3 minutes).
+              </p>
+              <div>
+                <p><span class="font-medium text-[var(--ink)]">2 ·</span> Under “Authorized redirect URIs”, paste:</p>
                 <button
-                  v-for="m in tier2Locked"
-                  :key="m.key"
-                  class="module-card"
-                  :class="{ on: !props.hidden.includes(m.key) }"
-                  :aria-pressed="!props.hidden.includes(m.key)"
-                  @click="emit('toggle', m.key)"
-                >
-                  <span class="truncate">{{ m.label }}</span>
-                  <span class="switch"><span class="knob" /></span>
-                </button>
+                  class="mt-1.5 w-full rounded-md bg-[var(--surface)] px-2.5 py-2 text-left font-mono text-[10px] break-all hover:ring-1 ring-[var(--accent)]"
+                  :title="gCopied ? 'Copied' : 'Click to copy'"
+                  @click="copyRedirect"
+                >{{ redirectUri }}</button>
+                <p class="mt-0.5" :class="gCopied ? 'text-[var(--accent)]' : 'text-[var(--ink-3)]'">{{ gCopied ? 'Copied.' : 'Click to copy.' }}</p>
               </div>
-            </template>
-          </section>
-
-          <section>
-            <div class="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--ink-3)]">Density</div>
-            <div class="flex gap-1 rounded-lg bg-[var(--bg)] p-1">
+              <div>
+                <p class="mb-1.5"><span class="font-medium text-[var(--ink)]">3 ·</span> Paste what Google gives you:</p>
+                <input
+                  v-model="gClientId"
+                  placeholder="Client ID (…apps.googleusercontent.com)"
+                  class="mb-2 w-full rounded-md bg-[var(--surface)] px-2.5 py-2 font-mono text-[10px] outline-none focus:ring-1 ring-[var(--accent)] placeholder:font-sans placeholder:text-xs placeholder:text-[var(--ink-3)]"
+                />
+                <input
+                  v-model="gSecret"
+                  type="password"
+                  placeholder="Client secret"
+                  class="w-full rounded-md bg-[var(--surface)] px-2.5 py-2 font-mono text-[10px] outline-none focus:ring-1 ring-[var(--accent)] placeholder:font-sans placeholder:text-xs placeholder:text-[var(--ink-3)]"
+                />
+              </div>
               <button
-                v-for="d in (['comfy', 'compact'] as const)"
-                :key="d"
-                class="flex-1 rounded-md px-2 py-1.5 text-sm"
-                :class="props.density === d ? 'bg-[var(--accent-soft)] font-medium text-[var(--accent)]' : 'text-[var(--ink-2)]'"
-                @click="emit('density', d)"
-              >
-                {{ d === 'comfy' ? 'Comfortable' : 'Compact' }}
-              </button>
+                class="w-full rounded-md bg-[var(--accent)] py-1.5 font-medium text-white disabled:opacity-50"
+                :disabled="gBusy || !gClientId || !gSecret"
+                @click="saveGoogle"
+              >Turn on Google sign-in</button>
+              <p v-if="gError" class="text-[var(--down)]">{{ gError }}</p>
             </div>
+            <p v-else-if="googleOn" class="px-2 text-xs text-[var(--ink-3)]">
+              Anyone with an account here can sign in with their Google account of the same email.
+            </p>
+            <p v-if="gError && !gSetup" class="px-2 text-xs text-[var(--down)]">{{ gError }}</p>
+          </section>
+
+          <section v-if="site">
+            <div class="mb-2.5 text-xs font-medium uppercase tracking-wide text-[var(--ink-3)]">Tracking snippet</div>
+            <p class="mb-2 px-2 text-xs text-[var(--ink-3)]">Paste this on {{ site.domain }}, just before <code class="rounded bg-[var(--bg)] px-1">&lt;/body&gt;</code>:</p>
+            <button
+              class="w-full rounded-lg bg-[var(--bg)] px-3.5 py-3 text-left font-mono text-[11px] leading-relaxed text-[var(--ink-2)] break-all hover:ring-1 ring-[var(--accent)]"
+              :title="copied ? 'Copied' : 'Click to copy'"
+              @click="copySnippet"
+            >{{ snippet }}</button>
+            <p class="mt-1 px-2 text-xs" :class="copied ? 'text-[var(--accent)]' : 'text-[var(--ink-3)]'">
+              {{ copied ? 'Copied.' : 'Click to copy.' }}
+            </p>
           </section>
 
           <section>
-            <div class="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--ink-3)]">Privacy</div>
-            <Toggle label="Tier-2 tracking" :on="props.tier2" @change="(on) => emit('tier2', on)" />
-            <p class="mt-1 px-2 text-xs text-[var(--ink-3)]">
-              Standard tracking forgets visitors daily. Tier-2 remembers users who accept via a
-              consent banner - <code class="rounded bg-[var(--bg)] px-1">melytics.consent(true)</code>,
-              unlocking the audience modules. Everyone else stays anonymous.
-            </p>
+            <div class="mb-2.5 text-xs font-medium uppercase tracking-wide text-[var(--ink-3)]">Sites</div>
+            <div>
+              <button
+                v-if="!adding"
+                class="rounded-lg px-2 py-1.5 text-sm text-[var(--ink-2)] hover:bg-[var(--bg)] hover:text-[var(--ink)]"
+                @click="adding = true"
+              >
+                + Add another site
+              </button>
+              <form v-else class="space-y-2" @submit.prevent="submitSite">
+                <div class="grid gap-2 lg:grid-cols-2">
+                  <input
+                    v-model="newName"
+                    placeholder="Name (e.g. My blog)"
+                    required
+                    class="w-full rounded-lg bg-[var(--bg)] px-3 py-2 text-sm outline-none focus:ring-2 ring-[var(--accent)] placeholder:text-[var(--ink-3)]"
+                  />
+                  <input
+                    v-model="newDomain"
+                    placeholder="Domain (e.g. blog.example.com)"
+                    required
+                    class="w-full rounded-lg bg-[var(--bg)] px-3 py-2 text-sm outline-none focus:ring-2 ring-[var(--accent)] placeholder:text-[var(--ink-3)]"
+                  />
+                </div>
+                <div class="flex gap-2">
+                  <button class="rounded-lg bg-[var(--accent)] px-3 py-1.5 text-sm font-medium text-white">Create</button>
+                  <button type="button" class="rounded-lg px-3 py-1.5 text-sm text-[var(--ink-3)]" @click="adding = false">Cancel</button>
+                </div>
+              </form>
+            </div>
+
+            <button
+              v-if="site"
+              class="mt-1 rounded-lg px-2 py-1.5 text-sm text-[var(--down,#e34948)] hover:bg-[var(--bg)]"
+              @click="emit('deleteSite')"
+            >
+              Delete {{ site.domain }}…
+            </button>
           </section>
         </div>
       </aside>
@@ -199,76 +331,6 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey))
 </template>
 
 <style scoped>
-/* Mini cards echo the dashboard's de-boxed cards: fill + soft shadow, no borders.
-   On = lifted card with accent dot; off = flat ghost fill, dimmed label. */
-.module-card {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  justify-content: space-between;
-  min-height: 4.25rem;
-  text-align: left;
-  border-radius: 12px;
-  padding: 0.625rem 0.75rem;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--ink-3);
-  background: color-mix(in srgb, var(--bg) 45%, transparent);
-  transition: background 150ms ease, color 150ms ease, box-shadow 150ms ease, transform 150ms cubic-bezier(0.23, 1, 0.32, 1);
-}
-.module-card:active {
-  transform: scale(0.97);
-}
-.module-card.on {
-  color: var(--ink);
-  background: var(--bg);
-  box-shadow: var(--shadow);
-}
-/* Tiny read-only switch — pure visual feedback, the whole card is the control.
-   Dark track always; the knob carries the state color. */
-.module-card .switch {
-  position: relative;
-  margin-left: auto;
-  height: 8px;
-  width: 15px;
-  flex: none;
-  border-radius: 9999px;
-  background: color-mix(in srgb, var(--ink) 12%, transparent);
-}
-.module-card .knob {
-  position: absolute;
-  top: 1.5px;
-  left: 0;
-  height: 5px;
-  width: 5px;
-  border-radius: 9999px;
-  background: var(--ink-3);
-  opacity: 0.6;
-  transform: translateX(1.5px);
-  transition: transform 150ms cubic-bezier(0.23, 1, 0.32, 1), background 150ms ease, opacity 150ms ease;
-}
-.module-card.on .knob {
-  background: var(--accent);
-  opacity: 1;
-  transform: translateX(8.5px);
-}
-
-/* FLIP move when cards reflow after a toggle or reorder; tier-2 unlocks fade in */
-.mods-move,
-.mods-enter-active,
-.mods-leave-active {
-  transition: transform 0.25s cubic-bezier(0.23, 1, 0.32, 1), opacity 0.2s ease;
-}
-.mods-enter-from,
-.mods-leave-to {
-  opacity: 0;
-  transform: scale(0.95);
-}
-.mods-leave-active {
-  position: absolute;
-}
-
 .drawer-enter-active,
 .drawer-leave-active {
   transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1);
@@ -289,8 +351,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey))
   .drawer-enter-active,
   .drawer-leave-active,
   .scrim-enter-active,
-  .scrim-leave-active,
-  .mods-move {
+  .scrim-leave-active {
     transition: none;
   }
 }

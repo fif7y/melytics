@@ -17,8 +17,11 @@ const copied = ref(false)
 
 const shareUrl = () => `${location.origin}${location.pathname}#/share/${link.value?.token}`
 
+// No on/off checkbox anymore — opening the panel is the intent, so a disabled
+// link is enabled on load and the panel just shows the URL + password.
 async function load() {
   link.value = await api<ShareLink>(`/sites/${props.siteId}/share`)
+  if (!link.value.enabled) await update({ enabled: true })
 }
 
 async function update(patch: Record<string, unknown>) {
@@ -57,15 +60,7 @@ onMounted(load)
     </button>
 
     <div v-if="open && link" class="absolute right-0 top-11 z-10 w-80 card p-4 space-y-3 shadow-lg">
-      <label class="flex items-center gap-2 text-sm">
-        <input
-          type="checkbox"
-          :checked="link.enabled"
-          class="accent-[var(--accent)]"
-          @change="update({ enabled: ($event.target as HTMLInputElement).checked })"
-        />
-        Public share link
-      </label>
+      <h2 class="text-sm font-semibold">Public share link</h2>
 
       <template v-if="link.enabled">
         <div class="flex items-center gap-2">

@@ -17,6 +17,7 @@ import SharePanel from '../components/SharePanel.vue'
 import { theme, accent, accentHex, scopeAccent } from '../lib/theme'
 import { useSiteScopedRef, safeJson } from '../lib/persist'
 import { useDateRange, todayIso, RANGES, RANGE_PRESETS } from '../lib/useDateRange'
+import ModulesPanel from '../components/ModulesPanel.vue'
 import SettingsPanel from '../components/SettingsPanel.vue'
 import AccountPanel from '../components/AccountPanel.vue'
 import SetupWizard from '../components/SetupWizard.vue'
@@ -448,22 +449,25 @@ async function logout() {
 
       <div class="flex items-center gap-2 justify-self-end">
         <SharePanel v-if="siteId" :key="siteId" :site-id="siteId" />
-        <SettingsPanel
+        <ModulesPanel
           :modules="orderedModules"
           :hidden="hidden"
-          :density="density"
           :tier2="site?.tier2_enabled ?? false"
           @toggle="toggleModule"
-          @density="setDensity"
           @tier2="setTier2"
           @reorder="moveKey"
+        />
+        <SettingsPanel
+          :site="site ?? null"
+          @add-site="addSite"
+          @delete-site="deleteSite"
         />
         <AccountPanel
           :site="site ?? null"
           :me="me"
+          :density="density"
           @notify="setNotify"
-          @add-site="addSite"
-          @delete-site="deleteSite"
+          @density="setDensity"
           @signout="logout"
         />
       </div>
