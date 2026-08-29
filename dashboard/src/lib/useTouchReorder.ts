@@ -26,6 +26,23 @@ export function useTouchReorder(cb: {
   let startY = 0
   let overKey: string | null = null
   let overGroup: string | undefined
+  let source: HTMLElement | null = null
+  let ghost: HTMLElement | null = null
+
+  // The visible drag: a lifted clone of the card riding under the finger,
+  // like the native drag ghost — elevation only, no outline
+  function liftGhost() {
+    if (!source) return
+    const r = source.getBoundingClientRect()
+    ghost = source.cloneNode(true) as HTMLElement
+    ghost.style.cssText += `;position:fixed;left:${r.left}px;top:${r.top}px;width:${r.width}px;height:${r.height}px;margin:0;z-index:9999;pointer-events:none;opacity:0.92;box-shadow:0 12px 32px rgba(0,0,0,0.22);transform:scale(1);transition:transform 150ms cubic-bezier(0.23,1,0.32,1);will-change:transform;`
+    document.body.appendChild(ghost)
+    requestAnimationFrame(() => ghost && (ghost.style.transform = 'scale(1.04)'))
+  }
+
+  function moveGhost(x: number, y: number) {
+    if (ghost) ghost.style.transform = `translate(${x - startX}px, ${y - startY}px) scale(1.04)`
+  }
 
   function cleanup() {
     if (timer !== null) clearTimeout(timer)
@@ -33,6 +50,9 @@ export function useTouchReorder(cb: {
     active = false
     overKey = null
     overGroup = undefined
+    source = null
+    ghost?.remove()
+    ghost = null
     document.removeEventListener('touchmove', onMove)
     document.removeEventListener('touchend', onEnd)
     document.removeEventListener('touchcancel', onCancel)
@@ -46,6 +66,7 @@ export function useTouchReorder(cb: {
       return
     }
     e.preventDefault()
+    moveGhost(t.clientX, t.clientY)
     const el = document.elementFromPoint(t.clientX, t.clientY)?.closest<HTMLElement>('[data-drag-key]')
     overKey = el?.dataset.dragKey ?? null
     overGroup = el?.dataset.dragGroup
@@ -57,6 +78,14 @@ export function useTouchReorder(cb: {
       e.preventDefault() // no synthetic click after a drag
       if (overKey) cb.drop(overKey, overGroup)
       cb.end()
+      // settle the ghost out instead of popping it away
+      const g = ghost
+      if (g) {
+        ghost = null
+        g.style.transition += ',opacity 150ms ease'
+        g.style.opacity = '0'
+        setTimeout(() => g.remove(), 160)
+      }
     }
     cleanup()
   }
@@ -72,12 +101,14 @@ export function useTouchReorder(cb: {
     const t = e.touches[0]
     startX = t.clientX
     startY = t.clientY
+    source = (e.currentTarget as HTMLElement | null) ?? null
     document.addEventListener('touchmove', onMove, { passive: false })
     document.addEventListener('touchend', onEnd, { passive: false })
     document.addEventListener('touchcancel', onCancel)
     timer = window.setTimeout(() => {
       timer = null
       active = true
+      liftGhost()
       cb.start(key, group)
     }, 250)
   }
