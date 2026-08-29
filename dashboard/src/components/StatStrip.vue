@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import type { Stats } from '../lib/api'
 import { useSiteScopedRef, safeJson } from '../lib/persist'
+import { useTouchReorder, isCoarse } from '../lib/useTouchReorder'
 
 const props = defineProps<{
   stats: Stats
@@ -125,6 +126,12 @@ const order = useSiteScopedRef<string[]>(
 )
 const dragKey = ref<string | null>(null)
 const overKey = ref<string | null>(null)
+const { touchStart } = useTouchReorder({
+  start: (k) => (dragKey.value = k),
+  over: (k) => (overKey.value = k),
+  drop: (k) => dropOn(k),
+  end: () => ((dragKey.value = null), (overKey.value = null)),
+})
 
 const orderedTiles = computed(() => {
   const idx = (k: string) => {
@@ -150,8 +157,9 @@ function dropOn(target: string) {
       :is="t.metric ? 'button' : 'div'"
       v-for="t in orderedTiles"
       :key="t.key"
-      draggable="true"
-      class="card px-4 pt-3.5 text-left transition-opacity"
+      :draggable="!isCoarse"
+      :data-drag-key="t.key"
+      class="drag-item card px-4 pt-3.5 text-left transition-opacity"
       :class="[
         t.metric ? 'cursor-pointer' : '',
         t.spark ? 'pb-2' : 'pb-3.5',
@@ -164,6 +172,7 @@ function dropOn(target: string) {
       @dragover.prevent="overKey = t.key"
       @dragleave="overKey === t.key && (overKey = null)"
       @drop.prevent="dropOn(t.key)"
+      @touchstart="touchStart($event, t.key)"
     >
       <div class="flex items-center gap-1.5 text-xs text-[var(--ink-3)]">
         <span v-if="t.liveDot" class="h-2 w-2 rounded-full bg-[var(--up)]" :class="{ 'animate-pulse': live && live > 0 }" />

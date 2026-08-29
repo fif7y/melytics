@@ -20,6 +20,7 @@ import SharePanel from '../components/SharePanel.vue'
 import { theme, accent, accentHex, scopeAccent } from '../lib/theme'
 import { useSiteScopedRef, safeJson } from '../lib/persist'
 import { useDateRange, todayIso, RANGES, RANGE_PRESETS } from '../lib/useDateRange'
+import { useTouchReorder, isCoarse } from '../lib/useTouchReorder'
 import ModulesPanel from '../components/ModulesPanel.vue'
 import SettingsPanel from '../components/SettingsPanel.vue'
 import AccountPanel from '../components/AccountPanel.vue'
@@ -163,6 +164,12 @@ function moveKey(from: string, to: string) {
 function dropOn(target: string) {
   if (dragKey.value) moveKey(dragKey.value, target)
 }
+const { touchStart } = useTouchReorder({
+  start: (k) => (dragKey.value = k),
+  over: (k) => (overKey.value = k),
+  drop: (k) => dropOn(k),
+  end: () => ((dragKey.value = null), (overKey.value = null)),
+})
 
 // Chart mark style, shared by the big chart and the stat-strip sparklines
 const CHART_STYLES = [
@@ -737,18 +744,20 @@ async function logout() {
         </div>
       </section>
 
-      <div v-if="show('goals') || show('funnels')" class="grid gap-5 lg:grid-cols-2">
+      <div v-if="show('goals') || show('funnels')" class="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <template v-for="k in rowOrder" :key="k">
           <div
             v-if="show(k)"
-            draggable="true"
-            class="rounded-[14px] transition-opacity"
+            :draggable="!isCoarse"
+            :data-drag-key="k"
+            class="drag-item rounded-[14px] transition-opacity"
             :class="{ 'opacity-40': dragKey === k, 'ring-2 ring-[var(--accent)]': overKey === k && dragKey && dragKey !== k }"
             @dragstart="dragKey = k"
             @dragend=";(dragKey = null), (overKey = null)"
             @dragover.prevent="overKey = k"
             @dragleave="overKey === k && (overKey = null)"
             @drop.prevent="dropOn(k)"
+            @touchstart="touchStart($event, k)"
           >
             <GoalsCard v-if="k === 'goals'" class="h-full" :site-id="siteId" :goals="goals" :targets="targets" :currency="site?.currency" @changed="() => load()" @assist="wizard?.show(goals.length ? 1 : 0)" />
             <FunnelsCard v-else class="h-full" :site-id="siteId" :funnels="funnels" :targets="targets" @changed="() => load()" @assist="wizard?.show(2)" />
@@ -756,18 +765,20 @@ async function logout() {
         </template>
       </div>
 
-      <TransitionGroup tag="div" name="mods" class="relative grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+      <TransitionGroup tag="div" name="mods" class="relative grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
         <div
           v-for="p in orderedPanels"
           :key="p.key"
-          draggable="true"
-          class="rounded-[14px] transition-opacity"
+          :draggable="!isCoarse"
+          :data-drag-key="p.key"
+          class="drag-item rounded-[14px] transition-opacity"
           :class="{ 'opacity-40': dragKey === p.key, 'ring-2 ring-[var(--accent)]': overKey === p.key && dragKey && dragKey !== p.key }"
           @dragstart="dragKey = p.key"
           @dragend=";(dragKey = null), (overKey = null)"
           @dragover.prevent="overKey = p.key"
           @dragleave="overKey === p.key && (overKey = null)"
           @drop.prevent="dropOn(p.key)"
+          @touchstart="touchStart($event, p.key)"
         >
           <BreakdownCard
             v-if="p.key === 'live'"

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, TransitionGroup } from 'vue'
 import Toggle from './Toggle.vue'
+import { useTouchReorder, isCoarse } from '../lib/useTouchReorder'
 
 export interface ModuleDef {
   key: string
@@ -49,6 +50,12 @@ function dropOn(key: string, group: 'row' | 'base') {
   dragGroup.value = null
   overKey.value = null
 }
+const { touchStart } = useTouchReorder({
+  start: (k, g) => startDrag(k, g as 'row' | 'base'),
+  over: (k) => (overKey.value = k),
+  drop: (k, g) => dropOn(k, g as 'row' | 'base'),
+  end: () => ((dragKey.value = null), (dragGroup.value = null), (overKey.value = null)),
+})
 
 function onKey(e: KeyboardEvent) {
   if (e.key === 'Escape') open.value = false
@@ -105,8 +112,10 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey))
               <button
                 v-for="m in rowModules"
                 :key="m.key"
-                draggable="true"
-                class="module-card"
+                :draggable="!isCoarse"
+                data-drag-group="row"
+                :data-drag-key="m.key"
+                class="module-card drag-item"
                 :class="{
                   on: !props.hidden.includes(m.key),
                   'opacity-40': dragKey === m.key,
@@ -119,6 +128,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey))
                 @dragover.prevent="overKey = m.key"
                 @dragleave="overKey === m.key && (overKey = null)"
                 @drop.prevent="dropOn(m.key, 'row')"
+                @touchstart="touchStart($event, m.key, 'row')"
               >
                 <span class="truncate">{{ m.label }}</span>
                 <span class="switch"><span class="knob" /></span>
@@ -128,8 +138,10 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey))
               <button
                 v-for="m in sortedGrid"
                 :key="m.key"
-                :draggable="isOn(m)"
-                class="module-card"
+                :draggable="isOn(m) && !isCoarse"
+                :data-drag-group="isOn(m) ? 'base' : undefined"
+                :data-drag-key="isOn(m) ? m.key : undefined"
+                class="module-card drag-item"
                 :class="{
                   on: isOn(m),
                   'opacity-40': dragKey === m.key,
@@ -142,6 +154,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey))
                 @dragover.prevent="isOn(m) && (overKey = m.key)"
                 @dragleave="overKey === m.key && (overKey = null)"
                 @drop.prevent="isOn(m) && dropOn(m.key, 'base')"
+                @touchstart="isOn(m) && touchStart($event, m.key, 'base')"
               >
                 <span class="truncate">{{ m.label }}</span>
                 <span class="switch"><span class="knob" /></span>

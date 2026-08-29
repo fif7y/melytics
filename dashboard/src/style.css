@@ -107,6 +107,21 @@ body,
   height: 100%;
 }
 
+/* Anything wider than the viewport (charts, tables) scrolls inside its own
+   card — the page itself never pans sideways on mobile */
+html,
+body {
+  overflow-x: clip;
+}
+
+/* Reorderable items: no iOS long-press callout/selection fighting the
+   touch drag (see lib/useTouchReorder.ts) */
+.drag-item {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
 body {
   background: var(--bg);
   color: var(--ink);
