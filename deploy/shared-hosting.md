@@ -21,9 +21,12 @@ a database (MySQL or SQLite), and cron. Examples below use `stats.example.com`.
    Delete the zip afterward. Files one folder too deep? Move that folder's
    contents up one level. And if your panel lets you point the document root
    at `…/public` directly, do — it's tidier.
-3. Visit the domain → the installer at `/install` checks requirements,
-   creates your login and first site on SQLite, then walks you through the
-   rest on screen: the tracking snippet, the cron job, and signing in.
+3. Visit the domain → the installer at `/install` first asks for a one-time
+   setup code: open `storage/install-token.txt` in your file manager and
+   paste it (proves it's you, not a stranger who found the URL first). It
+   then checks requirements, creates your login and first site on SQLite,
+   and walks you through the rest on screen: the tracking snippet, the cron
+   job, and signing in.
 
    For the cron: your panel's Cron Jobs form, command
    `/bin/sh /path/to/melytics/cron.sh` (the installer shows it with your real
@@ -36,6 +39,11 @@ a database (MySQL or SQLite), and cron. Examples below use `stats.example.com`.
    No cron yet? Stats still work — they refresh whenever the dashboard is
    opened — but the cron makes them continuous and powers digest/alert emails.
    The dashboard reminds you (with the exact command) until it's running.
+
+   Emails (digests, alerts, password resets) go out via the server's
+   sendmail by default. Deliverability shaky? An admin can connect any
+   email provider over SMTP in the dashboard — **Settings → Email
+   delivery** — no file editing.
 
 Even shorter: upload just `deploy/melytics-installer.php` into the folder your
 domain serves and open it in the browser — it downloads the latest release,

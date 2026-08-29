@@ -61,6 +61,11 @@ Cookieless by default. Self-hosted on shared hosting. MCP server built in.
 - Goals on custom events or page paths, with conversion rates and inline edit
 - Multi-step funnels with per-step drop-off and layout variants
 - Custom events: `melytics.track('signup', {plan: 'pro'})`
+- **Event properties** — explore any event's properties: value distributions
+  for strings, sum/avg/count for numbers, and numeric-by-category grouping
+  (purchase value by product = revenue by product)
+- **Goal revenue** — point an event goal at a numeric property and it sums
+  as revenue (with average per conversion), shown in your site's currency
 - Autotracking: outbound links, file downloads, 404s — zero config
 - **Setup assistant** — a guided wizard that creates goals and funnels from
   your real tracked pages, no code needed for path-based goals
@@ -77,6 +82,8 @@ Cookieless by default. Self-hosted on shared hosting. MCP server built in.
 - Spike & drop alerts — hourly check against the trailing week's median,
   designed alert email with a mini chart, per-site toggle
 - Chart annotations — mark launches and releases right on the graph
+- **Bots module** — blocked crawler and scraper traffic, counted and named
+  in its own panel instead of polluting your stats
 
 ![Web Vitals](docs/screenshots/vitals-light.png)
 
@@ -121,6 +128,8 @@ exists in the other theme — see `docs/screenshots/`.
   hidden modules aren't even fetched
 - Public share links (password-optional, stateless HMAC tokens)
 - Weekly email digest
+- **Email delivery built in** — a guided SMTP form (admin-only) connects any
+  email provider for digests, alerts, and password resets; sendmail by default
 - Account panel: theme, notifications, multi-site management with
   copy-paste snippet
 
@@ -130,7 +139,7 @@ exists in the other theme — see `docs/screenshots/`.
 </p>
 
 **Integrations**
-- MCP server built in — connect Claude via a URL from the dashboard, or any MCP client (8 tools, `mcp/README.md`)
+- MCP server built in — connect Claude via a URL from the dashboard, or any MCP client (9 tools, `mcp/README.md`)
 - Plain JSON API behind the dashboard
 
 ## Layout
@@ -169,8 +178,10 @@ Grab the release zip (or build one with `bash deploy/build-release.sh`), then:
    `melytics-installer.php` into the subdomain's folder and open it in your
    browser — it downloads and unpacks the release by itself.
 3. **Open `https://stats.your-domain.com/` in your browser.** The installer
-   checks your server, creates your login and first site, then walks you
-   through the last three steps on screen: paste the tracking snippet into
+   asks for a one-time setup code — open `storage/install-token.txt` in your
+   file manager and paste it (proves it's you, not a stranger who found the
+   URL first). It then checks your server, creates your login and first site,
+   and walks you through the last three steps on screen: paste the tracking snippet into
    your site (purge your site's cache after — caching plugins keep serving
    the old pages), add the every-minute cron job (it hands you the exact
    command — choose "Custom" if your panel asks, and set every schedule

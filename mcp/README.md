@@ -34,6 +34,7 @@ claude mcp add melytics --transport http https://stats.example.com/api/mcp --hea
 | `list_sites` | Which sites does this instance track? |
 | `get_stats` | Traffic over time, totals, previous-period comparison |
 | `get_breakdown` | Top pages, referrers, countries, devices, browsers, OS, UTM, events |
+| `get_event_props` | An event's properties: value distributions, sums/averages, revenue by segment |
 | `get_goals` | Goal conversions and rates |
 | `get_funnels` | Funnel step counts and drop-off |
 | `get_vitals` | p75 Core Web Vitals (LCP, CLS, INP, TTFB) |
@@ -44,7 +45,7 @@ All read-only; date args are `YYYY-MM-DD`, defaulting to the last 30 days.
 
 ## Local stdio server (optional)
 
-`index.js` in this folder is the same 8 tools as a local stdio MCP server, for
+`index.js` in this folder is the same 9 tools as a local stdio MCP server, for
 setups that prefer not to expose the HTTP endpoint. Needs Node 18+:
 
 ```bash

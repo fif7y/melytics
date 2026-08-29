@@ -57,6 +57,19 @@ server.tool(
     json(await get(`/sites/${a.site_id}/breakdown?dimension=${a.dimension}&${qs(a)}${a.limit ? `&limit=${a.limit}` : ''}`))
 )
 
+server.tool(
+  'get_event_props',
+  'Break down a custom event by one of its properties. A string property returns a value distribution; a numeric property returns an aggregate (sum/avg/count); a numeric property with "by" set is summed per group (e.g. purchase value by product = revenue by product)',
+  {
+    ...range,
+    event: z.string().describe('Custom event name (from get_breakdown with dimension=event)'),
+    prop: z.string().describe('Property key on that event'),
+    by: z.string().optional().describe('Optional categorical property to group a numeric prop by'),
+  },
+  async (a) =>
+    json(await get(`/sites/${a.site_id}/event-props?event=${encodeURIComponent(a.event)}&prop=${encodeURIComponent(a.prop)}${a.by ? `&by=${encodeURIComponent(a.by)}` : ''}&${qs(a)}`))
+)
+
 server.tool('get_goals', 'Goal conversion counts and rates for a site', range, async (a) =>
   json(await get(`/sites/${a.site_id}/goals?${qs(a)}`))
 )
