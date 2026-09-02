@@ -114,6 +114,22 @@ body {
   overflow-x: clip;
 }
 
+/* iOS Safari draws date inputs at their native intrinsic width, wider than
+   the box they're laid out in — they spilled past the custom-range modal.
+   Opting out of the native look keeps the tap-to-pick behaviour but makes
+   `width: 100%` stick; the value pseudo is centred by default on iOS */
+input[type='date'] {
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  min-width: 0;
+  min-height: 2.25rem;
+}
+
+input[type='date']::-webkit-date-and-time-value {
+  text-align: left;
+}
+
 /* Reorderable items: no iOS long-press callout/selection fighting the
    touch drag (see lib/useTouchReorder.ts) */
 .drag-item {
