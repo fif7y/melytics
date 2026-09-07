@@ -2,6 +2,8 @@
 import { computed, ref } from 'vue'
 import type { VitalsDist } from '../lib/api'
 import Histogram from './charts/Histogram.vue'
+import LayoutMenu from './LayoutMenu.vue'
+import type { Span } from '../lib/useChartTip'
 
 export interface Vitals {
   samples: number
@@ -12,7 +14,8 @@ export interface Vitals {
   dist?: VitalsDist
 }
 
-const props = defineProps<{ vitals: Vitals }>()
+const props = defineProps<{ vitals: Vitals; span?: Span }>()
+const emit = defineEmits<{ 'update:span': [n: Span] }>()
 
 // Google CWV thresholds: [good ≤, poor >]
 const METRICS = [
@@ -39,10 +42,8 @@ const layout = ref<LayoutKey>(
     return LAYOUTS.some((l) => l.key === v) ? (v as LayoutKey) : 'tiles'
   })()
 )
-const layoutMenu = ref(false)
 function setLayout(k: LayoutKey) {
   layout.value = k
-  layoutMenu.value = false
   try {
     localStorage.setItem(LAYOUT_KEY, k)
   } catch {}
@@ -86,29 +87,7 @@ const ARC = Math.PI * 36
   <section class="card p-5">
     <div class="flex items-center mb-3">
       <h3 class="text-sm font-medium text-[var(--ink-2)]">Web Vitals <span class="font-normal text-[var(--ink-3)]">p75</span></h3>
-      <div class="relative ml-2">
-        <button
-          class="flex h-6 w-6 items-center justify-center rounded-md text-[var(--ink-3)] hover:bg-[var(--bg)] hover:text-[var(--ink)]"
-          title="Vitals layout"
-          aria-label="Choose vitals layout"
-          @click="layoutMenu = !layoutMenu"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
-            <path d="M4 6h16M4 12h10M4 18h5" />
-          </svg>
-        </button>
-        <div v-if="layoutMenu" class="absolute left-0 top-full z-20 mt-1 w-32 rounded-xl bg-[var(--surface)] py-1 shadow-xl">
-          <button
-            v-for="l in LAYOUTS"
-            :key="l.key"
-            class="flex w-full items-center px-3 py-1.5 text-left text-sm hover:bg-[var(--bg)]"
-            :class="layout === l.key ? 'text-[var(--accent)] font-medium' : ''"
-            @click="setLayout(l.key)"
-          >
-            {{ l.label }}
-          </button>
-        </div>
-      </div>
+      <LayoutMenu class="-my-1 ml-1" align="left" :options="LAYOUTS" :model-value="layout" title="Vitals layout" :span="span" @update:model-value="setLayout" @update:span="emit('update:span', $event)" />
       <span class="ml-auto text-xs text-[var(--ink-3)]">{{ vitals.samples.toLocaleString() }} samples</span>
     </div>
 
@@ -180,7 +159,7 @@ const ARC = Math.PI * 36
     </div>
 
     <!-- Distribution: the shape behind each p75, thresholds as the only status colors -->
-    <div v-else-if="layout === 'dist' && vitals.dist" class="grid grid-cols-1 gap-3">
+    <div v-else-if="layout === 'dist' && vitals.dist" class="grid grid-cols-1 gap-3" :class="{ 'sm:grid-cols-2': span && span > 1 }">
       <div v-for="m in rows" :key="m.key">
         <div class="mb-1 flex items-baseline gap-2 text-xs">
           <span class="font-medium text-[var(--ink-2)]">{{ m.label }}</span>
@@ -194,6 +173,7 @@ const ARC = Math.PI * 36
           :thresholds="{ good: m.good, poor: m.poor }"
           :marker="m.value == null ? null : { value: m.value, label: 'p75' }"
           unit="samples"
+          :span="span"
         />
       </div>
     </div>

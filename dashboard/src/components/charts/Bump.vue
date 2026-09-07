@@ -1,16 +1,17 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { useChartTip } from '../../lib/useChartTip'
+import { useChartTip, SPAN_W, type Span } from '../../lib/useChartTip'
 
 /**
  * Rank of each top value per week (daily buckets summed by 7; hourly ranges
  * rank per day). The current leader is in accent, the rest grey; hovering
  * lifts one line. Only rank is shown — the stacked layout carries magnitude.
  */
-const props = defineProps<{ buckets: string[]; series: { value: string; points: number[] }[] }>()
+const props = defineProps<{ buckets: string[]; series: { value: string; points: number[] }[]; span?: Span }>()
 const { tip, show, hide, tipStyle } = useChartTip()
 const hl = ref<string | null>(null)
-const W = 400, LEFT = 96
+const LEFT = 96
+const W = computed(() => SPAN_W[props.span ?? 1])
 const data = computed(() => {
   const hourly = (props.buckets[0]?.length ?? 0) > 10
   // columns: hours→days, short daily ranges→days, longer→weeks
@@ -24,7 +25,7 @@ const data = computed(() => {
     order.forEach(([, i], r) => (ranks[i][c] = r + 1))
   }
   const H = Math.max(120, props.series.length * 26)
-  const x = (c: number) => LEFT + (c / (cols - 1)) * (W - LEFT - 8)
+  const x = (c: number) => LEFT + (c / (cols - 1)) * (W.value - LEFT - 8)
   const y = (r: number) => 10 + ((r - 1) / Math.max(1, props.series.length - 1)) * (H - 20)
   const lines = props.series.map((s, i) => ({
     value: s.value,

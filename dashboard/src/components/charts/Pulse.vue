@@ -1,15 +1,16 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useChartTip } from '../../lib/useChartTip'
+import { useChartTip, SPAN_W, type Span } from '../../lib/useChartTip'
 
 /** Last 60 seconds of pageviews as ticks; the newest land with a short fade. */
-const props = defineProps<{ recent: number[] }>()
+const props = defineProps<{ recent: number[]; span?: Span }>()
 const { tip, show, hide, tipStyle } = useChartTip()
-const W = 400, H = 70
+const H = 70
+const W = computed(() => SPAN_W[props.span ?? 1])
 const ticks = computed(() => {
   const per = new Array<number>(60).fill(0)
   props.recent.forEach((s) => per[59 - Math.min(59, Math.max(0, Math.floor(s)))]++)
-  const bw = W / 60
+  const bw = W.value / 60
   return per.map((n, i) => ({ i, n, x: i * bw + 1, w: bw - 2, h: n * 18, ago: 59 - i })).filter((t) => t.n)
 })
 </script>

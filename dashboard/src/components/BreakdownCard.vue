@@ -8,6 +8,7 @@ import Treemap from './charts/Treemap.vue'
 import Slope from './charts/Slope.vue'
 
 import { BREAKDOWN_LAYOUTS, LIVE_LAYOUTS, type BreakdownLayout, type LiveLayout } from '../lib/layouts'
+import type { Span } from '../lib/useChartTip'
 import Pulse from './charts/Pulse.vue'
 
 const PATH_DIMS = ['page', 'entry_page', 'exit_page', 'not_found']
@@ -31,8 +32,14 @@ const props = defineProps<{
   /** live card: seconds-ago of the last minute's pageviews (pulse layout) */
   recent?: number[] | null
   liveLayout?: LiveLayout
+  /** grid columns the card spans; wide cards show more rows in two columns */
+  span?: Span
+  minSpan?: Span
 }>()
-const emit = defineEmits<{ select: [value: string]; 'update:layout': [layout: BreakdownLayout]; 'update:liveLayout': [layout: LiveLayout] }>()
+const emit = defineEmits<{ select: [value: string]; 'update:layout': [layout: BreakdownLayout]; 'update:liveLayout': [layout: LiveLayout]; 'update:span': [n: Span] }>()
+// the parent fetches 16 rows; a one-column card shows the first 8
+const wide = computed(() => (props.span ?? 1) > 1)
+const shown = computed(() => (wide.value ? props.rows : props.rows.slice(0, 8)))
 
 // Controlled when the parent passes `layout`; otherwise (public share) local.
 const local = ref<BreakdownLayout>('list')
@@ -53,8 +60,8 @@ watch(options, (o) => {
   if (!o.some((l) => l.key === layout.value)) setLayout('list')
 })
 
-const max = computed(() => Math.max(...props.rows.map((r) => r.pageviews), 1))
-const total = computed(() => props.rows.reduce((s, r) => s + r.pageviews, 0))
+const max = computed(() => Math.max(...shown.value.map((r) => r.pageviews), 1))
+const total = computed(() => shown.value.reduce((s, r) => s + r.pageviews, 0))
 
 // Countries arrive as ISO codes; render flag + full name, filter still uses the raw code.
 const regionNames = (() => {
@@ -72,10 +79,10 @@ function display(row: { value: string }) {
     label: regionNames?.of(cc) ?? cc,
   }
 }
-const slices = computed(() => props.rows.map((r) => ({ key: r.value, ...display(r), value: r.pageviews })))
+const slices = computed(() => shown.value.map((r) => ({ key: r.value, ...display(r), value: r.pageviews })))
 const compareRows = computed(() => {
   const prev = new Map((props.previous ?? []).map((r) => [r.value, r.pageviews]))
-  return props.rows.map((r) => ({ key: r.value, ...display(r), now: r.pageviews, before: prev.get(r.value) ?? 0 }))
+  return shown.value.map((r) => ({ key: r.value, ...display(r), now: r.pageviews, before: prev.get(r.value) ?? 0 }))
 })
 const delta = (row: BreakdownRow) => {
   const before = (props.previous ?? []).find((p) => p.value === row.value)?.pageviews
@@ -98,19 +105,19 @@ function spark(values: number[] | undefined) {
         <span v-if="live" class="h-2 w-2 rounded-full bg-[var(--up)]" :class="{ 'animate-pulse': rows.length }" />
         {{ title }}
       </h3>
-      <LayoutMenu v-if="live && recent" class="-my-1 ml-auto" :options="LIVE_LAYOUTS" :model-value="liveLayout ?? 'list'" title="Live layout" @update:model-value="emit('update:liveLayout', $event)" />
-      <LayoutMenu v-else-if="!live && rows.length" class="-my-1 ml-auto" :options="options" :model-value="layout" :title="`${title} layout`" @update:model-value="setLayout" />
+      <LayoutMenu v-if="live && recent" class="-my-1 ml-auto" :options="LIVE_LAYOUTS" :model-value="liveLayout ?? 'list'" title="Live layout" :span="span" :min-span="minSpan" @update:model-value="emit('update:liveLayout', $event)" @update:span="emit('update:span', $event)" />
+      <LayoutMenu v-else-if="!live && rows.length" class="-my-1 ml-auto" :options="options" :model-value="layout" :title="`${title} layout`" :span="span" :min-span="minSpan" @update:model-value="setLayout" @update:span="emit('update:span', $event)" />
     </div>
     <template v-if="live && liveLayout === 'pulse' && recent">
       <p class="mb-2 text-sm"><b class="text-lg font-semibold tabular-nums">{{ rows.reduce((s, r) => s + r.pageviews, 0) }}</b> <span class="text-[var(--ink-3)]">on the site now</span></p>
-      <Pulse :recent="recent" />
+      <Pulse :recent="recent" :span="span" />
       <p v-if="rows.length" class="mt-2 truncate text-xs text-[var(--ink-3)]">{{ rows.map((r) => r.value).join(' · ') }}</p>
     </template>
     <p v-else-if="!rows.length" class="text-sm text-[var(--ink-3)]">{{ empty ?? 'No data yet' }}</p>
 
-    <Donut v-else-if="layout === 'donut'" :slices="slices" :selected="selected" :clickable="clickable" @select="(v) => emit('select', v)" />
-    <Strip v-else-if="layout === 'strip'" :slices="slices" :selected="selected" :clickable="clickable" @select="(v) => emit('select', v)" />
-    <Treemap v-else-if="layout === 'treemap'" :rows="rows" :selected="selected" :clickable="clickable" @select="(v) => emit('select', v)" />
+    <Donut v-else-if="layout === 'donut'" :slices="slices" :selected="selected" :clickable="clickable" :span="span" :max="wide ? 7 : 4" @select="(v) => emit('select', v)" />
+    <Strip v-else-if="layout === 'strip'" :slices="slices" :selected="selected" :clickable="clickable" :max="wide ? 6 : 4" @select="(v) => emit('select', v)" />
+    <Treemap v-else-if="layout === 'treemap'" :rows="shown" :selected="selected" :clickable="clickable" :span="span" @select="(v) => emit('select', v)" />
     <Slope
       v-else-if="layout === 'compare'"
       :rows="compareRows"
@@ -118,12 +125,13 @@ function spark(values: number[] | undefined) {
       :to-label="compareLabels?.to ?? 'now'"
       :selected="selected"
       :clickable="clickable"
+      :span="span"
       @select="(v) => emit('select', v)"
     />
 
-    <ul v-else class="space-y-1.5">
+    <ul v-else class="gap-x-5 gap-y-1.5" :class="wide ? 'grid grid-cols-1 sm:grid-cols-2' : 'space-y-1.5'">
       <li
-        v-for="row in rows"
+        v-for="row in shown"
         :key="row.value"
         class="group/row relative flex items-center gap-3 rounded-md px-2.5 py-1.5 overflow-hidden select-none"
         :class="clickable ? 'cursor-pointer hover:bg-[color-mix(in_srgb,var(--ink)_4%,transparent)]' : ''"

@@ -6,8 +6,14 @@ import { ref, onBeforeUnmount, onMounted } from 'vue'
  * this exact menu): a quiet lines glyph, a surface popover, the chosen layout
  * in accent. One recipe so every card's menu is the same menu.
  */
-defineProps<{ options: readonly { key: K; label: string }[]; modelValue: K; title?: string; align?: 'left' | 'right' }>()
-const emit = defineEmits<{ 'update:modelValue': [k: K] }>()
+/**
+ * `span` (1–3 grid columns) adds a width row at the bottom of the menu: three
+ * glyphs, the chosen one ring-selected. It is the touch route to resizing; on
+ * desktop the card's edge handle does the same thing directly.
+ */
+defineProps<{ options: readonly { key: K; label: string }[]; modelValue: K; title?: string; align?: 'left' | 'right'; span?: 1 | 2 | 3; minSpan?: 1 | 2 | 3 }>()
+const emit = defineEmits<{ 'update:modelValue': [k: K]; 'update:span': [n: 1 | 2 | 3] }>()
+const SPANS = [1, 2, 3] as const
 const open = ref(false)
 const root = ref<HTMLElement>()
 function pick(k: K) {
@@ -43,6 +49,21 @@ onBeforeUnmount(() => document.removeEventListener('click', onDoc))
       >
         {{ o.label }}
       </button>
+      <div v-if="span" class="mx-2 flex items-center gap-1 pt-1.5" :class="options.length ? 'mt-1 border-t border-[var(--grid)]' : ''" role="group" aria-label="Card width">
+        <span class="mr-auto pl-1 text-xs text-[var(--ink-3)]">Width</span>
+        <button
+          v-for="n in SPANS"
+          :key="n"
+          class="flex h-6 items-center justify-center gap-px rounded-md px-1.5 disabled:opacity-30"
+          :class="span === n ? 'bg-[var(--accent-soft)] ring-1 ring-[var(--accent)]' : 'hover:bg-[var(--bg)]'"
+          :disabled="n < (minSpan ?? 1)"
+          :title="`${n} column${n > 1 ? 's' : ''}`"
+          :aria-pressed="span === n"
+          @click="emit('update:span', n)"
+        >
+          <i v-for="k in n" :key="k" class="block h-3 w-1 rounded-[2px]" :style="{ background: span === n ? 'var(--accent)' : 'var(--ink-3)' }" />
+        </button>
+      </div>
     </div>
   </div>
 </template>

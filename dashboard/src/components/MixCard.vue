@@ -6,8 +6,10 @@ import Bump from './charts/Bump.vue'
 
 import { MIX_LAYOUTS, MIX_DIMS, type MixLayout, type MixDim } from '../lib/layouts'
 
-defineProps<{ mix: Mix; layout: MixLayout; dim: MixDim }>()
-const emit = defineEmits<{ 'update:layout': [l: MixLayout]; 'update:dim': [d: MixDim] }>()
+import type { Span } from '../lib/useChartTip'
+
+defineProps<{ mix: Mix; layout: MixLayout; dim: MixDim; span?: Span }>()
+const emit = defineEmits<{ 'update:layout': [l: MixLayout]; 'update:dim': [d: MixDim]; 'update:span': [n: Span] }>()
 </script>
 
 <template>
@@ -24,10 +26,10 @@ const emit = defineEmits<{ 'update:layout': [l: MixLayout]; 'update:dim': [d: Mi
         </select>
       </h3>
       <span class="text-xs text-[var(--ink-3)]">{{ layout === 'bump' ? 'rank over time' : 'share over time' }}</span>
-      <LayoutMenu class="-my-1 ml-auto" :options="MIX_LAYOUTS" :model-value="layout" title="Mix layout" @update:model-value="emit('update:layout', $event)" />
+      <LayoutMenu class="-my-1 ml-auto" :options="MIX_LAYOUTS" :model-value="layout" title="Mix layout" :span="span" @update:model-value="emit('update:layout', $event)" @update:span="emit('update:span', $event)" />
     </div>
     <p v-if="mix.buckets.length < 2 || !mix.series.length" class="text-sm text-[var(--ink-3)]">Needs at least two days of data</p>
-    <Bump v-else-if="layout === 'bump'" :buckets="mix.buckets" :series="mix.series" />
-    <StackedArea v-else :buckets="mix.buckets" :series="mix.series" :other="mix.other" />
+    <Bump v-else-if="layout === 'bump'" :buckets="mix.buckets" :series="mix.series" :span="span" />
+    <StackedArea v-else :buckets="mix.buckets" :series="mix.series" :other="mix.other" :span="span" />
   </section>
 </template>

@@ -2,9 +2,12 @@
 import { computed } from 'vue'
 import type { PathRow } from '../lib/api'
 import Sankey from './charts/Sankey.vue'
+import LayoutMenu from './LayoutMenu.vue'
+import type { Span } from '../lib/useChartTip'
 
 /** Where visitors come from, where they land, and what happens next. */
-const props = defineProps<{ paths: PathRow[]; hasGoals: boolean }>()
+const props = defineProps<{ paths: PathRow[]; hasGoals: boolean; span?: Span }>()
+const emit = defineEmits<{ 'update:span': [n: Span] }>()
 const total = computed(() => props.paths.reduce((s, r) => s + r.sessions, 0))
 const converted = computed(() => props.paths.filter((r) => r.outcome === 'converted').reduce((s, r) => s + r.sessions, 0))
 </script>
@@ -15,6 +18,7 @@ const converted = computed(() => props.paths.filter((r) => r.outcome === 'conver
       <h3 class="text-sm font-medium text-[var(--ink-2)]">Paths</h3>
       <span class="text-xs text-[var(--ink-3)]">source → landing page → outcome</span>
       <span v-if="total && hasGoals" class="ml-auto text-xs tabular-nums text-[var(--ink-3)]">{{ Math.round((converted / total) * 100) }}% of {{ total.toLocaleString() }} sessions converted</span>
+      <LayoutMenu v-if="span" class="-my-1 self-center" :class="total && hasGoals ? '' : 'ml-auto'" :options="[]" model-value="" title="Card width" :span="span" :min-span="2" @update:span="emit('update:span', $event)" />
     </div>
     <p v-if="!total" class="text-sm text-[var(--ink-3)]">No sessions yet</p>
     <template v-else>

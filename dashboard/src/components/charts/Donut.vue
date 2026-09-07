@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useChartTip, tint, fmtInt, pct } from '../../lib/useChartTip'
+import { useChartTip, tint, fmtInt, pct, type Span } from '../../lib/useChartTip'
 
 export interface Slice { key: string; label: string; icon?: string; value: number }
-const props = defineProps<{ slices: Slice[]; total?: number; unit?: string; selected?: string | null; clickable?: boolean; max?: number }>()
+const props = defineProps<{ slices: Slice[]; total?: number; unit?: string; selected?: string | null; clickable?: boolean; max?: number; span?: Span }>()
 const emit = defineEmits<{ select: [key: string] }>()
 const { tip, show, hide, tipStyle } = useChartTip()
 
@@ -57,7 +57,7 @@ const center = computed(() => (sum.value >= 10000 ? `${(sum.value / 1000).toFixe
       <text x="70" y="68" text-anchor="middle" style="font-size:20px;font-weight:600;fill:var(--ink)">{{ center }}</text>
       <text x="70" y="84" text-anchor="middle">{{ unit ?? 'views' }}</text>
     </svg>
-    <ul class="min-w-0 space-y-1.5 text-sm">
+    <ul class="min-w-0 gap-x-6 gap-y-1.5 text-sm" :class="span && span > 1 ? 'grid grid-cols-2' : 'space-y-1.5'">
       <li
         v-for="a in arcs"
         :key="a.key"

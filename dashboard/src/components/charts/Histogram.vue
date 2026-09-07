@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useChartTip, fmtInt, pct } from '../../lib/useChartTip'
+import { useChartTip, fmtInt, pct, SPAN_W, type Span } from '../../lib/useChartTip'
 
 /**
  * Fixed-width buckets as thin bars. Optional thresholds (good / poor) draw as
@@ -15,15 +15,17 @@ const props = defineProps<{
   thresholds?: { good: number; poor: number }
   marker?: { value: number; label: string } | null
   unit?: string
+  span?: Span
 }>()
 const { tip, show, hide, tipStyle } = useChartTip()
-const W = 400, H = 120
+const H = 120
+const W = computed(() => SPAN_W[props.span ?? 1])
 const f = (v: number) => (props.fmt ? props.fmt(v) : String(Math.round(v * 100) / 100))
 const bars = computed(() => {
   const n = props.counts.length
   const max = Math.max(1, ...props.counts)
   const total = props.counts.reduce((a, b) => a + b, 0)
-  const bw = W / n
+  const bw = W.value / n
   return props.counts.map((c, i) => {
     const lo = i * props.step
     const fill = !props.thresholds ? 'var(--accent)' : lo < props.thresholds.good ? 'var(--accent)' : lo < props.thresholds.poor ? 'var(--t3)' : 'var(--t4)'
@@ -32,11 +34,11 @@ const bars = computed(() => {
     return { i, x: i * bw + 1, w: Math.max(1, bw - 2), y: H - h, h, fill, label, c, share: pct(c, total) }
   })
 })
-const xOf = (v: number) => Math.min(W, (v / (props.step * props.counts.length)) * W)
+const xOf = (v: number) => Math.min(W.value, (v / (props.step * props.counts.length)) * W.value)
 const ticks = computed(() => {
-  if (props.labels) return props.labels.map((l, i) => ({ x: (i + 0.5) * (W / props.labels!.length), label: l, anchor: 'middle' }))
+  if (props.labels) return props.labels.map((l, i) => ({ x: (i + 0.5) * (W.value / props.labels!.length), label: l, anchor: 'middle' }))
   const span = props.step * props.counts.length
-  return [0, 0.25, 0.5, 0.75, 1].map((k) => ({ x: k * W, label: f(k * span), anchor: k === 0 ? 'start' : k === 1 ? 'end' : 'middle' }))
+  return [0, 0.25, 0.5, 0.75, 1].map((k) => ({ x: k * W.value, label: f(k * span), anchor: k === 0 ? 'start' : k === 1 ? 'end' : 'middle' }))
 })
 </script>
 

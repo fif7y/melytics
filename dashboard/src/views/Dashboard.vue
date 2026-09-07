@@ -10,6 +10,7 @@ import MixCard from '../components/MixCard.vue'
 import DurationCard from '../components/DurationCard.vue'
 import PathsCard from '../components/PathsCard.vue'
 import { HOURS_LAYOUTS, MIX_LAYOUTS, MIX_DIMS, LIVE_LAYOUTS, BREAKDOWN_LAYOUTS, type BreakdownLayout, type HoursLayout, type MixLayout, type MixDim, type LiveLayout } from '../lib/layouts'
+import type { Span } from '../lib/useChartTip'
 import StatStrip from '../components/StatStrip.vue'
 import GoalsCard, { type GoalRow } from '../components/GoalsCard.vue'
 import FunnelsCard, { type FunnelRow } from '../components/FunnelsCard.vue'
@@ -245,6 +246,50 @@ const compareLabels = computed(() => ({
   to: customRange.value ? 'this period' : rangeDays.value === 1 ? 'today' : `this ${rangeDays.value}d`,
 }))
 
+// Card width = grid columns spanned (1–3). Not free pixels: the grid stays a
+// grid, persistence is one small map, and responsiveness is automatic (a
+// 3-wide card is 2-wide on tablet and full-width on a phone). Set from the
+// layout menu's width row, or by dragging the card's right edge on desktop.
+const MIN_SPAN: Record<string, Span> = { paths: 2 }
+const DEFAULT_SPAN: Record<string, Span> = { paths: 3 }
+const SPAN_CLASS: Record<Span, string> = { 1: '', 2: 'sm:col-span-2 lg:col-span-2', 3: 'sm:col-span-2 lg:col-span-3' }
+const spans = useSiteScopedRef<Record<string, Span>>(
+  'melytics_spans',
+  siteId,
+  (raw) => {
+    const v = safeJson(raw)
+    return v && typeof v === 'object' ? Object.fromEntries(Object.entries(v as Record<string, unknown>).filter(([, n]) => n === 1 || n === 2 || n === 3) as [string, Span][]) : {}
+  },
+  true
+)
+const spanOf = (key: string): Span => Math.max(MIN_SPAN[key] ?? 1, spans.value[key] ?? DEFAULT_SPAN[key] ?? 1) as Span
+function setSpan(key: string, n: Span) {
+  spans.value = { ...spans.value, [key]: Math.max(MIN_SPAN[key] ?? 1, Math.min(3, n)) as Span }
+}
+// Edge-handle drag: pointer capture on the grip, snap to the next column once
+// the pointer crosses half a column. Desktop only (lg); touch uses the menu.
+const resizing = ref<string | null>(null)
+function startResize(e: PointerEvent, key: string) {
+  const el = (e.currentTarget as HTMLElement).parentElement!
+  const startSpan = spanOf(key)
+  const colW = el.getBoundingClientRect().width / startSpan
+  const x0 = e.clientX
+  resizing.value = key
+  const move = (ev: PointerEvent) => {
+    const next = Math.max(MIN_SPAN[key] ?? 1, Math.min(3, startSpan + Math.round((ev.clientX - x0) / colW))) as Span
+    if (next !== spanOf(key)) setSpan(key, next)
+  }
+  const up = () => {
+    resizing.value = null
+    window.removeEventListener('pointermove', move)
+    window.removeEventListener('pointerup', up)
+    window.removeEventListener('pointercancel', up)
+  }
+  window.addEventListener('pointermove', move)
+  window.addEventListener('pointerup', up)
+  window.addEventListener('pointercancel', up)
+}
+
 // Density: compact tightens card padding and row spacing
 const density = useSiteScopedRef<'comfy' | 'compact'>('melytics_density', siteId, (raw) => (raw === 'compact' ? 'compact' : 'comfy'))
 function setDensity(d: 'comfy' | 'compact') {
@@ -324,7 +369,7 @@ async function load(silent = false) {
     duration?: Duration | null
     paths?: PathRow[] | null
   }>(
-    `/sites/${id}/dashboard?${rangeParams()}${filterQS()}&limit=8` +
+    `/sites/${id}/dashboard?${rangeParams()}${filterQS()}&limit=16` +
       `&modules=${modules.join(',')}&panels=${activePanels.map((p) => p.key).join(',')}` +
       `&compare=${compareDims.value.join(',')}&trend=${trendDims.value.join(',')}&mix_dim=${mixDim.value}`
   ).finally(() => {
@@ -842,8 +887,8 @@ async function logout() {
           :key="p.key"
           :draggable="!isCoarse"
           :data-drag-key="p.key"
-          class="drag-item rounded-[14px] transition-opacity"
-          :class="{ 'opacity-40': dragKey === p.key, 'ring-2 ring-[var(--accent)]': overKey === p.key && dragKey && dragKey !== p.key, 'sm:col-span-2 lg:col-span-3': p.key === 'paths' }"
+          class="drag-item group/card relative rounded-[14px] transition-opacity"
+          :class="[{ 'opacity-40': dragKey === p.key, 'ring-2 ring-[var(--accent)]': (overKey === p.key && dragKey && dragKey !== p.key) || resizing === p.key }, SPAN_CLASS[spanOf(p.key)]]"
           @dragstart="dragKey = p.key"
           @dragend=";(dragKey = null), (overKey = null)"
           @dragover.prevent="overKey = p.key"
@@ -859,14 +904,16 @@ async function logout() {
             :rows="livePages"
             :recent="liveRecent"
             :live-layout="liveLayout"
+            :span="spanOf('live')"
             empty="No one on the site right now"
             @update:live-layout="liveLayout = $event"
+            @update:span="(n) => setSpan('live', n)"
           />
-          <VitalsCard v-else-if="p.key === 'vitals' && vitals" class="h-full" :vitals="vitals" />
-          <HoursCard v-else-if="p.key === 'hours' && hours" class="h-full" :hours="hours" :layout="hoursLayout" :timezone="site?.timezone" @update:layout="hoursLayout = $event" />
-          <MixCard v-else-if="p.key === 'mix' && mix" class="h-full" :mix="mix" :layout="mixLayout" :dim="mixDim" @update:layout="mixLayout = $event" @update:dim="mixDim = $event" />
-          <DurationCard v-else-if="p.key === 'duration' && duration" class="h-full" :duration="duration" :avg="stats?.totals.avg_duration" />
-          <PathsCard v-else-if="p.key === 'paths' && paths" class="h-full" :paths="paths" :has-goals="goals.length > 0" />
+          <VitalsCard v-else-if="p.key === 'vitals' && vitals" class="h-full" :vitals="vitals" :span="spanOf('vitals')" @update:span="(n) => setSpan('vitals', n)" />
+          <HoursCard v-else-if="p.key === 'hours' && hours" class="h-full" :hours="hours" :layout="hoursLayout" :timezone="site?.timezone" :span="spanOf('hours')" @update:layout="hoursLayout = $event" @update:span="(n) => setSpan('hours', n)" />
+          <MixCard v-else-if="p.key === 'mix' && mix" class="h-full" :mix="mix" :layout="mixLayout" :dim="mixDim" :span="spanOf('mix')" @update:layout="mixLayout = $event" @update:dim="mixDim = $event" @update:span="(n) => setSpan('mix', n)" />
+          <DurationCard v-else-if="p.key === 'duration' && duration" class="h-full" :duration="duration" :avg="stats?.totals.avg_duration" :span="spanOf('duration')" @update:span="(n) => setSpan('duration', n)" />
+          <PathsCard v-else-if="p.key === 'paths' && paths" class="h-full" :paths="paths" :has-goals="goals.length > 0" :span="spanOf('paths')" @update:span="(n) => setSpan('paths', n)" />
           <BotsCard v-else-if="p.key === 'bots' && bots" class="h-full" :bots="bots" :humans="stats?.totals.pageviews ?? 0" />
           <RetentionCard
             v-else-if="p.key === 'retention' && retention"
@@ -908,9 +955,24 @@ async function logout() {
             :trend="trends[p.key]"
             can-compare
             :compare-labels="compareLabels"
+            :span="spanOf(p.key)"
             @update:layout="(l) => setBdLayout(p.key, l)"
+            @update:span="(n) => setSpan(p.key, n)"
             @select="(v) => !p.inert && setFilter(p.key, v)"
           />
+          <!-- Resize grip: rests at low alpha, surfaces on card hover (desktop only) -->
+          <div
+            class="absolute inset-y-4 -right-1 hidden w-2 cursor-col-resize touch-none items-center justify-center opacity-0 transition-opacity group-hover/card:opacity-100 lg:flex"
+            :class="{ 'opacity-100': resizing === p.key }"
+            title="Drag to resize"
+            draggable="false"
+            @pointerdown.stop.prevent="startResize($event, p.key)"
+            @dragstart.stop.prevent
+            @touchstart.stop
+            @mousedown.stop
+          >
+            <span class="block h-8 w-1 rounded-full" :style="{ background: resizing === p.key ? 'var(--accent)' : 'color-mix(in srgb, var(--ink) 25%, transparent)' }" />
+          </div>
         </div>
       </TransitionGroup>
     </main>

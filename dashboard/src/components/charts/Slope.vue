@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useChartTip, fmtInt } from '../../lib/useChartTip'
+import { useChartTip, fmtInt, SPAN_W, type Span } from '../../lib/useChartTip'
 
 /** This period vs the previous one, one line per value. Up = accent, down = grey. */
-const props = defineProps<{ rows: { key: string; label: string; icon?: string; now: number; before: number }[]; fromLabel: string; toLabel: string; selected?: string | null; clickable?: boolean }>()
+const props = defineProps<{ rows: { key: string; label: string; icon?: string; now: number; before: number }[]; fromLabel: string; toLabel: string; selected?: string | null; clickable?: boolean; span?: Span }>()
 const emit = defineEmits<{ select: [key: string] }>()
 const { tip, show, hide, tipStyle } = useChartTip()
 
-const W = 400, X0 = 64, X1 = 236
+const X0 = 64
+const W = computed(() => SPAN_W[props.span ?? 1])
+const X1 = computed(() => W.value - 164)
 const lines = computed(() => {
   const rows = props.rows.slice().sort((a, b) => b.now - a.now).slice(0, 8)
   const H = Math.max(150, rows.length * 26)

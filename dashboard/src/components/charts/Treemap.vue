@@ -1,17 +1,18 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useChartTip, fmtInt, pct } from '../../lib/useChartTip'
+import { useChartTip, fmtInt, pct, SPAN_W, type Span } from '../../lib/useChartTip'
 
 /**
  * Pages grouped by first path segment → one column per section (width ∝
  * section views), rows inside (height ∝ page views). Section tint steps down
  * from the accent; pages step down inside their section.
  */
-const props = defineProps<{ rows: { value: string; pageviews: number }[]; selected?: string | null; clickable?: boolean }>()
+const props = defineProps<{ rows: { value: string; pageviews: number }[]; selected?: string | null; clickable?: boolean; span?: Span }>()
 const emit = defineEmits<{ select: [key: string] }>()
 const { tip, show, hide, tipStyle } = useChartTip()
 
-const W = 400, H = 200, G = 2
+const H = 200, G = 2
+const W = computed(() => SPAN_W[props.span ?? 1])
 const cells = computed(() => {
   const total = props.rows.reduce((s, r) => s + r.pageviews, 0)
   const groups = new Map<string, { value: string; pageviews: number }[]>()
@@ -25,7 +26,7 @@ const cells = computed(() => {
   const out: { key: string; x: number; y: number; w: number; h: number; mix: number; value: number; label: string; share: number }[] = []
   let x = 0
   secs.forEach((sec, si) => {
-    const w = total ? (sec.sum / total) * W : 0
+    const w = total ? (sec.sum / total) * W.value : 0
     let y = 0
     sec.pages.forEach((p, pi) => {
       const h = sec.sum ? (p.pageviews / sec.sum) * H : 0

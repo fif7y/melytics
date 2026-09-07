@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useChartTip, fmtInt } from '../../lib/useChartTip'
+import { useChartTip, fmtInt, SPAN_W, type Span } from '../../lib/useChartTip'
 
 /** 24 radial bars for today, the range's hourly average as a dotted ring. */
-const props = defineProps<{ today: number[]; avg: number[]; nowHour: number }>()
+const props = defineProps<{ today: number[]; avg: number[]; nowHour: number; span?: Span }>()
 const { tip, show, hide, tipStyle } = useChartTip()
-const W = 400, H = 200, CX = 105, CY = 100, R0 = 26, R1 = 84
+const H = 200, CX = 105, CY = 100, R0 = 26, R1 = 84
+const W = computed(() => SPAN_W[props.span ?? 1])
 function arc(cx: number, cy: number, r0: number, r1: number, a0: number, a1: number) {
   const p = (r: number, a: number) => [cx + r * Math.cos(a), cy + r * Math.sin(a)]
   const [x0, y0] = p(r1, a0), [x1, y1] = p(r1, a1), [x2, y2] = p(r0, a1), [x3, y3] = p(r0, a0)

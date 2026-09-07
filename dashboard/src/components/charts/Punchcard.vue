@@ -1,13 +1,16 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useChartTip, fmtInt } from '../../lib/useChartTip'
+import { useChartTip, fmtInt, SPAN_W, type Span } from '../../lib/useChartTip'
 
 /** 7 × 24 grid of visitors per weekday/hour; sequential = one hue, light → dark. */
-const props = defineProps<{ grid: number[][]; days: number }>()
+const props = defineProps<{ grid: number[][]; days: number; span?: Span }>()
 const { tip, show, hide, tipStyle } = useChartTip()
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-const W = 400, L = 34, CH = 17
-const cw = (W - L) / 24
+const L = 34
+const W = computed(() => SPAN_W[props.span ?? 1])
+// cells stay square-ish: taller rows when the card is wider
+const CH = computed(() => (props.span && props.span > 1 ? 26 : 17))
+const cw = computed(() => (W.value - L) / 24)
 const cells = computed(() => {
   const max = Math.max(1, ...props.grid.flat())
   let peak = { d: 0, h: 0, v: -1 }

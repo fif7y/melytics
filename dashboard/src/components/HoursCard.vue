@@ -7,8 +7,10 @@ import Clock from './charts/Clock.vue'
 
 import { HOURS_LAYOUTS, type HoursLayout } from '../lib/layouts'
 
-const props = defineProps<{ hours: Hours; layout: HoursLayout; timezone?: string }>()
-const emit = defineEmits<{ 'update:layout': [l: HoursLayout] }>()
+import type { Span } from '../lib/useChartTip'
+
+const props = defineProps<{ hours: Hours; layout: HoursLayout; timezone?: string; span?: Span }>()
+const emit = defineEmits<{ 'update:layout': [l: HoursLayout]; 'update:span': [n: Span] }>()
 
 const empty = computed(() => !props.hours.grid.some((r) => r.some((v) => v > 0)))
 // hourly mean across the range, for the clock's dotted ring
@@ -27,10 +29,10 @@ const nowHour = computed(() => {
     <div class="mb-4 flex items-center gap-2">
       <h3 class="text-sm font-medium text-[var(--ink-2)]">Hours</h3>
       <span class="text-xs text-[var(--ink-3)]">{{ layout === 'clock' ? 'today vs average' : 'visitors by hour and weekday' }}</span>
-      <LayoutMenu class="-my-1 ml-auto" :options="HOURS_LAYOUTS" :model-value="layout" title="Hours layout" @update:model-value="emit('update:layout', $event)" />
+      <LayoutMenu class="-my-1 ml-auto" :options="HOURS_LAYOUTS" :model-value="layout" title="Hours layout" :span="span" @update:model-value="emit('update:layout', $event)" @update:span="emit('update:span', $event)" />
     </div>
     <p v-if="empty" class="text-sm text-[var(--ink-3)]">No data yet</p>
-    <Clock v-else-if="layout === 'clock'" :today="hours.today" :avg="avg" :now-hour="nowHour" />
-    <Punchcard v-else :grid="hours.grid" :days="hours.days" />
+    <Clock v-else-if="layout === 'clock'" :today="hours.today" :avg="avg" :now-hour="nowHour" :span="span" />
+    <Punchcard v-else :grid="hours.grid" :days="hours.days" :span="span" />
   </section>
 </template>
