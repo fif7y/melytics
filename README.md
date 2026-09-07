@@ -54,6 +54,15 @@ Cookieless by default. Self-hosted on shared hosting. MCP server built in.
   powered by a tracker heartbeat
 - Date ranges: presets stay live (rolling), custom ranges with
   this-month / last-month / YTD / last-12-months shortcuts
+- **Chart layouts** — every breakdown card has a layout menu: List, Donut,
+  Strip, Treemap (pages), Compare (this period vs previous, as a slope
+  chart) and Trend (a sparkline per row). One accent, five tints, so every
+  form reads as one family
+- **Hours** (hour × weekday punchcard or today's clock against the hourly
+  average), **Mix over time** (share stacked, or rank per week, for any
+  dimension), **Visit duration** distribution, **Paths** (source → landing
+  page → outcome flow), a **Calendar** chart style for long ranges, a
+  **Distribution** layout for Web Vitals and a **Pulse** layout for Live
 
 ![Breakdowns](docs/screenshots/breakdowns-light.png)
 

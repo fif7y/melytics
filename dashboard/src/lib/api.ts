@@ -141,3 +141,31 @@ export interface Bots {
   total: number
   names: { value: string; pageviews: number }[]
 }
+
+/** Hours card: visitors summed per (weekday Mon-first, hour) over the range, plus today's hourly curve. */
+export interface Hours {
+  grid: number[][]
+  today: number[]
+  days: number
+}
+/** Mix card: per-bucket pageviews for a dimension's top values, remainder as `other`. */
+export interface Mix {
+  buckets: string[]
+  series: { value: string; points: number[] }[]
+  other: number[]
+}
+/** Visit-duration distribution in fixed buckets. */
+export interface Duration {
+  sessions: number
+  median: number | null
+  buckets: { label: string; sessions: number }[]
+}
+/** One (source, landing page, outcome) group of sessions — the Paths card's flow. */
+export interface PathRow {
+  source: string
+  landing: string
+  outcome: string
+  sessions: number
+}
+/** Histogram behind a vital's p75: 32 fixed-width buckets, the last open-ended. */
+export type VitalsDist = Record<'lcp' | 'inp' | 'cls' | 'ttfb', { step: number; counts: number[] }>

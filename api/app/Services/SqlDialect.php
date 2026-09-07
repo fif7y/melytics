@@ -76,4 +76,16 @@ class SqlDialect
             ? "FLOOR(DATEDIFF(DATE_ADD($column, INTERVAL $offsetMin MINUTE), '2024-01-01') / 7)"
             : "CAST((julianday(date(datetime($column, '$offsetMin minutes'))) - julianday('2024-01-01')) / 7 AS INTEGER)";
     }
+
+    /** Weekday of a stored site-local period label, 0 = Sunday … 6 = Saturday. */
+    public static function weekday(string $column): string
+    {
+        return self::mysql() ? "(DAYOFWEEK($column) - 1)" : "CAST(strftime('%w', $column) AS INTEGER)";
+    }
+
+    /** Hour (0–23) of a stored site-local period label. */
+    public static function hour(string $column): string
+    {
+        return self::mysql() ? "HOUR($column)" : "CAST(strftime('%H', $column) AS INTEGER)";
+    }
 }

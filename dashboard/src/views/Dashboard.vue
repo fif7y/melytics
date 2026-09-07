@@ -1,9 +1,15 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { api, setToken, type Annotation, type Attribution, type Bots, type BreakdownRow, type CohortRow, type Loyalty, type Me, type Retention, type Site, type Stats, type TimeToConvert } from '../lib/api'
+import { api, setToken, type Annotation, type Attribution, type Bots, type BreakdownRow, type CohortRow, type Duration, type Hours, type Loyalty, type Me, type Mix, type PathRow, type Retention, type Site, type Stats, type TimeToConvert } from '../lib/api'
 import TimeChart from '../components/TimeChart.vue'
+import Calendar from '../components/charts/Calendar.vue'
 import BreakdownCard from '../components/BreakdownCard.vue'
+import HoursCard from '../components/HoursCard.vue'
+import MixCard from '../components/MixCard.vue'
+import DurationCard from '../components/DurationCard.vue'
+import PathsCard from '../components/PathsCard.vue'
+import { HOURS_LAYOUTS, MIX_LAYOUTS, MIX_DIMS, LIVE_LAYOUTS, BREAKDOWN_LAYOUTS, type BreakdownLayout, type HoursLayout, type MixLayout, type MixDim, type LiveLayout } from '../lib/layouts'
 import StatStrip from '../components/StatStrip.vue'
 import GoalsCard, { type GoalRow } from '../components/GoalsCard.vue'
 import FunnelsCard, { type FunnelRow } from '../components/FunnelsCard.vue'
@@ -40,6 +46,13 @@ const loyalty = ref<Loyalty | null>(null)
 const attribution = ref<Attribution | null>(null)
 const ttc = ref<TimeToConvert | null>(null)
 const bots = ref<Bots | null>(null)
+const hours = ref<Hours | null>(null)
+const mix = ref<Mix | null>(null)
+const duration = ref<Duration | null>(null)
+const paths = ref<PathRow[] | null>(null)
+// Compare / trend layouts need more than the current rows — fetched per card on demand
+const prevBreakdowns = ref<Record<string, BreakdownRow[]>>({})
+const trends = ref<Record<string, Record<string, number[]>>>({})
 const annotations = ref<Annotation[]>([])
 const noting = ref(false)
 const noteDay = ref(new Date().toISOString().slice(0, 10))
@@ -47,6 +60,7 @@ const noteText = ref('')
 const breakdowns = ref<Record<string, BreakdownRow[]>>({})
 const live = ref<number | null>(null)
 const livePages = ref<BreakdownRow[]>([])
+const liveRecent = ref<number[] | null>(null)
 const metric = ref<'visitors' | 'pageviews'>('visitors')
 const filter = ref<{ dim: string; value: string } | null>(null)
 const loading = ref(true)
@@ -88,6 +102,10 @@ const MODULES = [
   { key: 'live', label: 'Live pages' },
   { key: 'vitals', label: 'Web Vitals' },
   { key: 'bots', label: 'Bots' },
+  { key: 'hours', label: 'Hours' },
+  { key: 'mix', label: 'Mix over time' },
+  { key: 'duration', label: 'Visit duration' },
+  { key: 'paths', label: 'Paths' },
   { key: 'retention', label: 'Retention', tier2: true },
   { key: 'cohorts', label: 'Cohorts', tier2: true },
   { key: 'loyalty', label: 'Loyalty', tier2: true },
@@ -125,8 +143,9 @@ const rowOrder = useSiteScopedRef<string[]>(
 )
 // Vitals lives in the same reorderable grid as the breakdowns
 // Default grid order for fresh installs — the curated layout (saved 2026-08-26)
-const GRID_DEFAULT = ['page', 'live', 'country', 'referrer', 'device', 'browser', 'vitals', 'entry_page', 'exit_page', 'channel', 'not_found', 'outbound', 'download', 'utm_source', 'utm_medium', 'utm_campaign', 'event', 'event_props', 'bots', 'loyalty', 'retention', 'attribution', 'ttc', 'cohorts']
-const SPECIAL_TITLES: Record<string, string> = { live: 'Live', vitals: 'Web Vitals', bots: 'Bots', retention: 'Retention', cohorts: 'Cohorts', loyalty: 'Loyalty', attribution: 'Attribution', ttc: 'Time to convert', event_props: 'Event properties' }
+const GRID_DEFAULT = ['page', 'live', 'country', 'referrer', 'device', 'browser', 'hours', 'mix', 'vitals', 'duration', 'entry_page', 'exit_page', 'channel', 'paths', 'not_found', 'outbound', 'download', 'utm_source', 'utm_medium', 'utm_campaign', 'event', 'event_props', 'bots', 'loyalty', 'retention', 'attribution', 'ttc', 'cohorts']
+const SPECIAL_TITLES: Record<string, string> = { live: 'Live', vitals: 'Web Vitals', bots: 'Bots', hours: 'Hours', mix: 'Mix over time', duration: 'Visit duration', paths: 'Paths', retention: 'Retention', cohorts: 'Cohorts', loyalty: 'Loyalty', attribution: 'Attribution', ttc: 'Time to convert', event_props: 'Event properties' }
+const SPECIAL_KEYS = Object.keys(SPECIAL_TITLES)
 const GRID_ITEMS = GRID_DEFAULT.map((k) => PANELS.find((p) => p.key === k) ?? { key: k, title: SPECIAL_TITLES[k] })
 // Sort position of a grid card: its saved order, else after everything saved,
 // in default-grid order. Shared by both drag surfaces and the settings list.
@@ -178,8 +197,11 @@ const CHART_STYLES = [
   { key: 'step', label: 'Step' },
   { key: 'bars', label: 'Bars' },
   { key: 'glow', label: 'Glow' },
+  { key: 'calendar', label: 'Calendar' },
 ] as const
 type ChartStyle = (typeof CHART_STYLES)[number]['key']
+// the calendar is a grid, not a line — sparklines keep the smooth mark then
+const lineStyle = computed(() => (chartStyle.value === 'calendar' ? 'smooth' : chartStyle.value))
 const chartStyle = useSiteScopedRef<ChartStyle>('melytics_chart_style', siteId, (raw) =>
   CHART_STYLES.some((s) => s.key === raw) ? (raw as ChartStyle) : 'smooth'
 )
@@ -188,6 +210,40 @@ function setChartStyle(k: ChartStyle) {
   chartStyle.value = k
   chartStyleMenu.value = false
 }
+
+// Per-card layouts (v0.5), per site like every other dashboard preference.
+// Breakdown layouts are one map keyed by dimension; the special cards own a key each.
+const isBd = (v: unknown): v is BreakdownLayout => BREAKDOWN_LAYOUTS.some((l) => l.key === v)
+const bdLayouts = useSiteScopedRef<Record<string, BreakdownLayout>>(
+  'melytics_bd_layouts',
+  siteId,
+  (raw) => {
+    const v = safeJson(raw)
+    return v && typeof v === 'object' ? Object.fromEntries(Object.entries(v as Record<string, unknown>).filter(([, l]) => isBd(l)) as [string, BreakdownLayout][]) : {}
+  },
+  true
+)
+const bdLayout = (dim: string): BreakdownLayout => bdLayouts.value[dim] ?? 'list'
+function setBdLayout(dim: string, l: BreakdownLayout) {
+  bdLayouts.value = { ...bdLayouts.value, [dim]: l }
+}
+const pick = <T extends string>(opts: readonly { key: T }[], fallback: T) => (raw: string | null) => (opts.some((o) => o.key === raw) ? (raw as T) : fallback)
+const hoursLayout = useSiteScopedRef<HoursLayout>('melytics_hours_layout', siteId, pick(HOURS_LAYOUTS, 'punchcard'))
+const mixLayout = useSiteScopedRef<MixLayout>('melytics_mix_layout', siteId, pick(MIX_LAYOUTS, 'stacked'))
+const mixDim = useSiteScopedRef<MixDim>('melytics_mix_dim', siteId, pick(MIX_DIMS, 'device'))
+const liveLayout = useSiteScopedRef<LiveLayout>('melytics_live_layout', siteId, pick(LIVE_LAYOUTS, 'list'))
+// dims whose current layout needs previous-period rows / per-row series
+const compareDims = computed(() => PANELS.filter((p) => show(p.key) && ['compare', 'trend'].includes(bdLayout(p.key))).map((p) => p.key))
+const trendDims = computed(() => PANELS.filter((p) => show(p.key) && bdLayout(p.key) === 'trend').map((p) => p.key))
+// a card switched into a data-hungry layout it has no data for → quiet refetch
+watch(bdLayouts, () => {
+  if (compareDims.value.some((d) => !prevBreakdowns.value[d]) || trendDims.value.some((d) => !trends.value[d])) load(true)
+})
+watch(mixDim, () => load(true))
+const compareLabels = computed(() => ({
+  from: customRange.value ? 'previous period' : rangeDays.value === 1 ? 'yesterday' : `previous ${rangeDays.value}d`,
+  to: customRange.value ? 'this period' : rangeDays.value === 1 ? 'today' : `this ${rangeDays.value}d`,
+}))
 
 // Density: compact tightens card padding and row spacing
 const density = useSiteScopedRef<'comfy' | 'compact'>('melytics_density', siteId, (raw) => (raw === 'compact' ? 'compact' : 'comfy'))
@@ -233,7 +289,7 @@ async function load(silent = false) {
     loading.value = false
     return
   }
-  const key = `${siteId.value}|${rangeParams()}|${filterQS()}`
+  const key = `${siteId.value}|${rangeParams()}|${filterQS()}|${compareDims.value.join()}|${trendDims.value.join()}|${mixDim.value}`
   if (key === inflightKey) return
   inflightKey = key
   if (!silent) loading.value = true
@@ -244,7 +300,7 @@ async function load(silent = false) {
   // hosting, so a site switch used to cost ~16 round trips.
   const activePanels = PANELS.filter((p) => show(p.key))
   const modules: string[] = [
-    ...['goals', 'funnels', 'vitals', 'bots'].filter(show),
+    ...['goals', 'funnels', 'vitals', 'bots', 'hours', 'mix', 'duration', 'paths'].filter(show),
     ...['retention', 'cohorts', 'loyalty', 'attribution', 'ttc'].filter(visible),
   ]
   const r = await api<{
@@ -261,9 +317,16 @@ async function load(silent = false) {
     attribution: Attribution | null
     ttc: TimeToConvert | null
     breakdowns: Record<string, BreakdownRow[]>
+    previous_breakdowns?: Record<string, BreakdownRow[]>
+    trends?: Record<string, Record<string, number[]>>
+    hours?: Hours | null
+    mix?: Mix | null
+    duration?: Duration | null
+    paths?: PathRow[] | null
   }>(
     `/sites/${id}/dashboard?${rangeParams()}${filterQS()}&limit=8` +
-      `&modules=${modules.join(',')}&panels=${activePanels.map((p) => p.key).join(',')}`
+      `&modules=${modules.join(',')}&panels=${activePanels.map((p) => p.key).join(',')}` +
+      `&compare=${compareDims.value.join(',')}&trend=${trendDims.value.join(',')}&mix_dim=${mixDim.value}`
   ).finally(() => {
     if (inflightKey === key) inflightKey = ''
   })
@@ -282,6 +345,12 @@ async function load(silent = false) {
   attribution.value = r.attribution
   ttc.value = r.ttc
   breakdowns.value = Object.fromEntries(activePanels.map((p) => [p.key, r.breakdowns[p.key] ?? []]))
+  prevBreakdowns.value = r.previous_breakdowns ?? {}
+  trends.value = r.trends ?? {}
+  hours.value = r.hours ?? null
+  mix.value = r.mix ?? null
+  duration.value = r.duration ?? null
+  paths.value = r.paths ?? null
   loading.value = false
 }
 
@@ -296,9 +365,10 @@ async function pollLive(initial = false) {
   livePolling = true
   const id = siteId.value
   try {
-    const r = await api<{ visitors: number; pages: { path: string; visitors: number }[] }>(`/sites/${id}/live`)
+    const r = await api<{ visitors: number; pages: { path: string; visitors: number }[]; recent?: number[] }>(`/sites/${id}/live`)
     if (id !== siteId.value) return // switched sites mid-flight — stale numbers
     live.value = r.visitors
+    liveRecent.value = r.recent ?? null
     livePages.value = r.pages.map((p) => ({ value: p.path, pageviews: p.visitors, visitors: p.visitors }))
   } catch {} finally {
     livePolling = false
@@ -675,7 +745,7 @@ async function logout() {
     </main>
 
     <main v-else-if="stats" class="space-y-5" :class="{ compact: density === 'compact' }">
-      <StatStrip :stats="stats" :metric="metric" :live="live" :line-style="chartStyle" :site-id="siteId" @update:metric="metric = $event" />
+      <StatStrip :stats="stats" :metric="metric" :live="live" :line-style="lineStyle" :site-id="siteId" @update:metric="metric = $event" />
 
       <section class="card p-5">
         <div class="flex items-baseline gap-3 mb-2">
@@ -723,7 +793,8 @@ async function logout() {
           <button class="rounded-lg px-3 py-1.5 text-sm text-white bg-[var(--accent)]">Save</button>
         </form>
 
-        <TimeChart :key="`${theme}-${accent}-${accentHex}`" :series="stats.series" :previous="stats.previous_series" :metric="metric" :annotations="annotations" :line-style="chartStyle" />
+        <Calendar v-if="chartStyle === 'calendar'" :series="stats.series" :metric="metric" :annotations="annotations" />
+        <TimeChart v-else :key="`${theme}-${accent}-${accentHex}`" :series="stats.series" :previous="stats.previous_series" :metric="metric" :annotations="annotations" :line-style="lineStyle" />
 
         <div v-if="annotations.length" class="mt-2 flex flex-wrap gap-1.5">
           <span
@@ -772,7 +843,7 @@ async function logout() {
           :draggable="!isCoarse"
           :data-drag-key="p.key"
           class="drag-item rounded-[14px] transition-opacity"
-          :class="{ 'opacity-40': dragKey === p.key, 'ring-2 ring-[var(--accent)]': overKey === p.key && dragKey && dragKey !== p.key }"
+          :class="{ 'opacity-40': dragKey === p.key, 'ring-2 ring-[var(--accent)]': overKey === p.key && dragKey && dragKey !== p.key, 'sm:col-span-2 lg:col-span-3': p.key === 'paths' }"
           @dragstart="dragKey = p.key"
           @dragend=";(dragKey = null), (overKey = null)"
           @dragover.prevent="overKey = p.key"
@@ -786,9 +857,16 @@ async function logout() {
             title="Live"
             live
             :rows="livePages"
+            :recent="liveRecent"
+            :live-layout="liveLayout"
             empty="No one on the site right now"
+            @update:live-layout="liveLayout = $event"
           />
           <VitalsCard v-else-if="p.key === 'vitals' && vitals" class="h-full" :vitals="vitals" />
+          <HoursCard v-else-if="p.key === 'hours' && hours" class="h-full" :hours="hours" :layout="hoursLayout" :timezone="site?.timezone" @update:layout="hoursLayout = $event" />
+          <MixCard v-else-if="p.key === 'mix' && mix" class="h-full" :mix="mix" :layout="mixLayout" :dim="mixDim" @update:layout="mixLayout = $event" @update:dim="mixDim = $event" />
+          <DurationCard v-else-if="p.key === 'duration' && duration" class="h-full" :duration="duration" :avg="stats?.totals.avg_duration" />
+          <PathsCard v-else-if="p.key === 'paths' && paths" class="h-full" :paths="paths" :has-goals="goals.length > 0" />
           <BotsCard v-else-if="p.key === 'bots' && bots" class="h-full" :bots="bots" :humans="stats?.totals.pageviews ?? 0" />
           <RetentionCard
             v-else-if="p.key === 'retention' && retention"
@@ -818,13 +896,19 @@ async function logout() {
             :events="targets.events"
           />
           <BreakdownCard
-            v-else-if="!['vitals', 'bots', 'retention', 'live', 'cohorts', 'loyalty', 'attribution', 'ttc', 'event_props'].includes(p.key)"
+            v-else-if="!SPECIAL_KEYS.includes(p.key)"
             class="h-full"
             :title="p.title"
             :rows="breakdowns[p.key] ?? []"
             :dim="p.key"
             :clickable="!p.inert"
             :selected="filter?.dim === p.key ? filter.value : null"
+            :layout="bdLayout(p.key)"
+            :previous="prevBreakdowns[p.key]"
+            :trend="trends[p.key]"
+            can-compare
+            :compare-labels="compareLabels"
+            @update:layout="(l) => setBdLayout(p.key, l)"
             @select="(v) => !p.inert && setFilter(p.key, v)"
           />
         </div>

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Site;
+use App\Services\ChartStats;
 use App\Services\Stats;
 use App\Services\Tier2Stats;
 use Illuminate\Http\JsonResponse;
@@ -11,7 +12,7 @@ use Illuminate\Support\Facades\DB;
 
 class StatsController extends Controller
 {
-    public function __construct(private Stats $stats, private Tier2Stats $tier2) {}
+    public function __construct(private Stats $stats, private Tier2Stats $tier2, private ChartStats $charts) {}
 
     public function stats(Request $request, Site $site): JsonResponse
     {
@@ -41,6 +42,20 @@ class StatsController extends Controller
         ));
         $limit = min((int) $request->query('limit', 8), 100);
         $on = fn (string $m) => in_array($m, $modules, true);
+        // Chart layouts that need more than the current rows (v0.5): ?compare=
+        // names panels wanting the previous period, ?trend= those wanting a
+        // per-bucket series per row. Only cards in those layouts pay for it.
+        $dims = fn (string $q) => array_values(array_intersect(array_filter(explode(',', (string) $request->query($q))), $panels));
+        $compare = $dims('compare');
+        $trend = $dims('trend');
+        $days = (int) $from->diffInDays($to) + 1;
+        [$prevFrom, $prevTo] = [$from->copy()->subDays($days), $from->copy()->subDay()];
+        $mixDim = (string) $request->query('mix_dim', 'device');
+        abort_unless(in_array($mixDim, Stats::breakdownDimensions(), true), 422);
+
+        $breakdowns = collect($panels)->mapWithKeys(fn (string $dim) => [
+            $dim => $this->stats->breakdown($site, $dim, $from, $to, $limit, $filter),
+        ]);
 
         $annotations = $site->annotations()->orderBy('day')
             ->where('day', '>=', $from->toDateString())
@@ -67,9 +82,17 @@ class StatsController extends Controller
             'loyalty' => $on('loyalty') ? $this->tier2->loyalty($site, $from, $to) : null,
             'attribution' => $on('attribution') ? $this->tier2->attribution($site, $from, $to) : null,
             'ttc' => $on('ttc') ? $this->tier2->timeToConvert($site, $from, $to) : null,
-            'breakdowns' => collect($panels)->mapWithKeys(fn (string $dim) => [
-                $dim => $this->stats->breakdown($site, $dim, $from, $to, $limit, $filter),
+            'breakdowns' => $breakdowns,
+            'previous_breakdowns' => collect($compare)->mapWithKeys(fn (string $dim) => [
+                $dim => $this->stats->breakdown($site, $dim, $prevFrom, $prevTo, 100, $filter),
             ]),
+            'trends' => collect($trend)->mapWithKeys(fn (string $dim) => [
+                $dim => $this->charts->trend($site, $dim, collect($breakdowns[$dim] ?? [])->pluck('value')->map(fn ($v) => (string) $v)->all(), $from, $to, $interval),
+            ]),
+            'hours' => $on('hours') ? $this->charts->hours($site, $from, $to) : null,
+            'mix' => $on('mix') ? $this->charts->mix($site, $mixDim, $from, $to, $interval) : null,
+            'duration' => $on('duration') ? $this->charts->durations($site, $from, $to) : null,
+            'paths' => $on('paths') ? $this->charts->paths($site, $from, $to) : null,
         ]);
     }
 
@@ -256,7 +279,17 @@ class StatsController extends Controller
             ->selectRaw('path, COUNT(*) as visitors')
             ->get();
 
-        return response()->json(['visitors' => $visitors, 'pages' => $pages]);
+        // Pulse layout: seconds-ago of each pageview in the last minute
+        $recent = DB::table('hits')
+            ->where('site_id', $site->id)
+            ->where('created_at', '>=', now()->subSeconds(60))
+            ->whereNull('event')
+            ->orderBy('created_at')
+            ->pluck('created_at')
+            ->map(fn ($t) => max(0, now()->getTimestamp() - \Illuminate\Support\Carbon::parse($t)->getTimestamp()))
+            ->all();
+
+        return response()->json(['visitors' => $visitors, 'pages' => $pages, 'recent' => $recent]);
     }
 
     private function authorizeSite(Request $request, Site $site): void

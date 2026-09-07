@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import type { VitalsDist } from '../lib/api'
+import Histogram from './charts/Histogram.vue'
 
 export interface Vitals {
   samples: number
@@ -7,6 +9,7 @@ export interface Vitals {
   cls: number | null
   inp: number | null
   ttfb: number | null
+  dist?: VitalsDist
 }
 
 const props = defineProps<{ vitals: Vitals }>()
@@ -26,6 +29,7 @@ const LAYOUTS = [
   { key: 'gauges', label: 'Gauges' },
   { key: 'bullet', label: 'Bullet' },
   { key: 'scoreline', label: 'Scoreline' },
+  { key: 'dist', label: 'Distribution' },
 ] as const
 type LayoutKey = (typeof LAYOUTS)[number]['key']
 const LAYOUT_KEY = 'melytics_vitals_layout'
@@ -173,6 +177,25 @@ const ARC = Math.PI * 36
           <span class="mt-1 block text-[var(--ink-3)]">good ≤ {{ m.fmt(m.good) }} · poor &gt; {{ m.fmt(m.poor) }}</span>
         </span>
       </span>
+    </div>
+
+    <!-- Distribution: the shape behind each p75, thresholds as the only status colors -->
+    <div v-else-if="layout === 'dist' && vitals.dist" class="grid grid-cols-1 gap-3">
+      <div v-for="m in rows" :key="m.key">
+        <div class="mb-1 flex items-baseline gap-2 text-xs">
+          <span class="font-medium text-[var(--ink-2)]">{{ m.label }}</span>
+          <span class="tabular-nums" :style="{ color: m.color }">{{ m.text }}</span>
+          <span class="text-[var(--ink-3)]">p75</span>
+        </div>
+        <Histogram
+          :counts="vitals.dist[m.key].counts"
+          :step="vitals.dist[m.key].step"
+          :fmt="m.fmt"
+          :thresholds="{ good: m.good, poor: m.poor }"
+          :marker="m.value == null ? null : { value: m.value, label: 'p75' }"
+          unit="samples"
+        />
+      </div>
     </div>
 
     <!-- Tracks (dot) and Bullet (filled bar) share the row geometry -->

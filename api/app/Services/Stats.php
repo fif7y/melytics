@@ -357,14 +357,30 @@ class Stats
             return $v === null ? null : (float) $v;
         };
 
+        // Distribution behind the p75: 32 fixed-width buckets per metric (the
+        // last one is open-ended), one GROUP BY each — feeds the Distribution layout
+        $dist = [];
+        foreach (self::VITALS_BUCKETS as $key => $step) {
+            $b = "CAST({$exprs[$key]} / $step AS INTEGER)";
+            $counts32 = array_fill(0, 32, 0);
+            foreach ($base()->whereRaw("{$exprs[$key]} IS NOT NULL")->groupByRaw($b)->selectRaw("$b as b, COUNT(*) as n")->get() as $r) {
+                $counts32[min(31, max(0, (int) $r->b))] += (int) $r->n;
+            }
+            $dist[$key] = ['step' => $step, 'counts' => $counts32];
+        }
+
         return [
             'samples' => (int) $counts->samples,
             'lcp' => $p75('lcp'),
             'cls' => $p75('cls'),
             'inp' => $p75('inp'),
             'ttfb' => $p75('ttfb'),
+            'dist' => $dist,
         ];
     }
+
+    /** Histogram bucket width per vital, in the metric's own unit (ms, except CLS). */
+    public const VITALS_BUCKETS = ['lcp' => 250, 'inp' => 25, 'cls' => 0.01, 'ttfb' => 100];
 
     /** @param array{dimension: string, value: string}|null $filter */
     public function series(int $siteId, Carbon $from, Carbon $to, string $interval, ?array $filter = null, int $offsetMin = 0)
