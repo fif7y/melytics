@@ -44,13 +44,13 @@ const parts = computed(() => {
       <li
         v-for="p in parts"
         :key="p.key"
-        class="flex items-center gap-2"
+        class="flex min-w-0 max-w-full items-center gap-2"
         :class="[clickable && p.key !== '__other' ? 'cursor-pointer' : '', selected === p.key ? 'font-medium text-[var(--accent)]' : '']"
         @click="clickable && p.key !== '__other' && emit('select', p.key)"
       >
         <i class="h-2.5 w-2.5 rounded-full" :style="{ background: p.fill }" />
         <span v-if="p.icon">{{ p.icon }}</span>
-        <span class="truncate">{{ p.label }}</span>
+        <span class="min-w-0 truncate">{{ p.label }}</span>
         <span class="tabular-nums text-[var(--ink-3)]">{{ fmtInt(p.value) }}</span>
       </li>
     </ul>
