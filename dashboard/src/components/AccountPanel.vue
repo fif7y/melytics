@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue'
-import { type Me, type Site } from '../lib/api'
+import { api, type Me, type Site } from '../lib/api'
 import Toggle from './Toggle.vue'
 import { theme, setTheme, type Theme, accent, accentHex, setAccent, setAccentHex, applyTheme, ACCENTS } from '../lib/theme'
 
@@ -22,7 +22,24 @@ const emit = defineEmits<{
   notify: [field: 'digest_enabled' | 'alerts_enabled', on: boolean]
   density: [d: 'comfy' | 'compact']
   signout: []
+  update: [version: string, update: Me['update']]
 }>()
+
+// Manual update check (admin, release installs). The server-side release
+// lookup is cached 12h; this forces a fresh one and hands the answer up so
+// the dashboard banner appears without a reload.
+const checking = ref<'idle' | 'busy' | 'fresh' | 'failed'>('idle')
+async function checkUpdates() {
+  checking.value = 'busy'
+  try {
+    const r = await api<{ version: string; update: Me['update'] }>('/update/check', { method: 'POST' })
+    emit('update', r.version, r.update ?? null)
+    checking.value = 'fresh'
+  } catch {
+    checking.value = 'failed'
+  }
+  setTimeout(() => (checking.value = 'idle'), 4000)
+}
 
 const open = ref(false)
 
@@ -163,9 +180,19 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey))
             </svg>
             Sign out
           </button>
-          <p v-if="me?.version" class="mt-2 px-2 text-xs text-[var(--ink-3)]">
-            melytics {{ me.version === 'dev' ? 'dev' : `v${me.version}` }}
-            <template v-if="me.update"> · <span class="text-[var(--accent)]">v{{ me.update.latest }} available</span></template>
+          <p v-if="me?.version" class="mt-2 flex items-center gap-1.5 px-2 text-xs text-[var(--ink-3)]">
+            <span>melytics {{ me.version === 'dev' ? 'dev' : `v${me.version}` }}</span>
+            <template v-if="me.update">
+              <span>·</span>
+              <span class="text-[var(--accent)]">v{{ me.update.latest }} available</span>
+            </template>
+            <template v-else-if="me.is_admin && me.version !== 'dev'">
+              <span>·</span>
+              <span v-if="checking === 'busy'">Checking…</span>
+              <span v-else-if="checking === 'fresh'">Up to date</span>
+              <span v-else-if="checking === 'failed'">Couldn't reach GitHub</span>
+              <button v-else class="hover:text-[var(--ink)]" @click="checkUpdates">Check for updates</button>
+            </template>
           </p>
         </div>
       </aside>

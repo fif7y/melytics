@@ -658,6 +658,7 @@ async function logout() {
           @notify="setNotify"
           @density="setDensity"
           @signout="logout"
+          @update="(v, u) => me && (me = { ...me, version: v, update: u })"
         />
       </div>
     </header>
