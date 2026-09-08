@@ -19,30 +19,40 @@ class Version
         return $v ??= trim((string) @file_get_contents(base_path('VERSION'))) ?: 'dev';
     }
 
-    // Latest published release, cached half a day so /auth/me stays cheap.
-    // Returns ['version' => '0.2.0', 'url' => ...] or null (dev install,
-    // GitHub unreachable, no releases yet).
+    // Latest published release. Cached 1h (the hourly scheduler also refreshes
+    // it, so a warm cache never hides a new release for long); a failed lookup
+    // is remembered 10 min so an unreachable GitHub doesn't stall every request
+    // for the 5s timeout. Returns ['version' => '0.2.0', 'url' => ...] or null
+    // (dev install, GitHub unreachable, no releases yet).
     public static function latest(bool $fresh = false): ?array
     {
         if (self::current() === 'dev') {
             return null;
         }
+        $key = 'melytics.latest_release';
         if ($fresh) {
-            Cache::forget('melytics.latest_release');
+            Cache::forget($key);
+        }
+        $cached = Cache::get($key);
+        if (is_array($cached)) {
+            return $cached;
+        }
+        if ($cached === 'unreachable') {
+            return null;
         }
 
-        return Cache::remember('melytics.latest_release', now()->addHours(12), function () {
-            try {
-                $r = Http::withUserAgent('melytics-update-check')->timeout(5)
-                    ->get('https://api.github.com/repos/'.self::REPO.'/releases/latest');
-
-                return $r->ok()
-                    ? ['version' => ltrim($r->json('tag_name', ''), 'v'), 'url' => $r->json('html_url')]
-                    : null;
-            } catch (\Throwable) {
-                return null;
+        $latest = null;
+        try {
+            $r = Http::withUserAgent('melytics-update-check')->timeout(5)
+                ->get('https://api.github.com/repos/'.self::REPO.'/releases/latest');
+            if ($r->ok() && $r->json('tag_name')) {
+                $latest = ['version' => ltrim($r->json('tag_name'), 'v'), 'url' => $r->json('html_url')];
             }
-        });
+        } catch (\Throwable) {
+        }
+        Cache::put($key, $latest ?? 'unreachable', $latest ? now()->addHour() : now()->addMinutes(10));
+
+        return $latest;
     }
 
     // ['latest' => ..., 'url' => ...] when a newer release exists, else null.
