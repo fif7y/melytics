@@ -28,7 +28,9 @@ onBeforeUnmount(() => document.removeEventListener('click', onDoc))
 </script>
 
 <template>
-  <div ref="root" class="relative">
+  <!-- Below `sm` the grid is one column, so card width is meaningless: hide the
+       row, and the whole menu when width is all it offers. -->
+  <div ref="root" class="relative" :class="options.length ? '' : 'hidden sm:block'">
     <button
       class="flex h-7 w-7 items-center justify-center rounded-md text-[var(--ink-3)] hover:bg-[var(--bg)] hover:text-[var(--ink)]"
       :title="title ?? 'Layout'"
@@ -49,7 +51,7 @@ onBeforeUnmount(() => document.removeEventListener('click', onDoc))
       >
         {{ o.label }}
       </button>
-      <div v-if="span" class="mx-2 flex items-center gap-1 pt-1.5" :class="options.length ? 'mt-1 border-t border-[var(--grid)]' : ''" role="group" aria-label="Card width">
+      <div v-if="span" class="mx-2 hidden items-center gap-1 pt-1.5 sm:flex" :class="options.length ? 'mt-1 border-t border-[var(--grid)]' : ''" role="group" aria-label="Card width">
         <span class="mr-auto pl-1 text-xs text-[var(--ink-3)]">Width</span>
         <button
           v-for="n in SPANS"
