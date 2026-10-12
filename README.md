@@ -1,7 +1,7 @@
 # melytics
 
 <p align="center">
-  <a href="https://github.com/fif7y/melytics/stargazers"><img src="https://img.shields.io/github/stars/fif7y/melytics?color=2ea44f&cacheSeconds=3600" alt="GitHub stars"></a>
+  <a href="https://github.com/fif7y/melytics/stargazers"><img src="https://img.shields.io/github/stars/fif7y/melytics?color=2ea44f&cacheSeconds=1800" alt="GitHub stars"></a>
   <a href="deploy/shared-hosting.md"><img src="https://img.shields.io/badge/runs_on-shared_hosting-E8A33D" alt="Runs on shared hosting"></a>
   <a href="mcp/"><img src="https://img.shields.io/badge/AI-MCP_server-8A63D2" alt="Bundled MCP server"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-free_to_use-blue" alt="License: free to use"></a>
@@ -17,8 +17,8 @@ Cookieless by default. Self-hosted on shared hosting. MCP server built in.
   <a href="#install-without-a-terminal-shared-hosting">Install guide ↓</a>
   <br>
   <br>
-  <a href="https://github.com/fif7y/melytics/releases/latest"><img src="https://img.shields.io/github/v/release/fif7y/melytics?cacheSeconds=3600" alt="Latest release"></a>
-  <a href="https://github.com/fif7y/melytics/releases"><img src="https://img.shields.io/github/downloads/fif7y/melytics/total?color=2ea44f&cacheSeconds=3600" alt="Downloads"></a>
+  <a href="https://github.com/fif7y/melytics/releases/latest"><img src="https://img.shields.io/github/v/release/fif7y/melytics?cacheSeconds=1800" alt="Latest release"></a>
+  <a href="https://github.com/fif7y/melytics/releases"><img src="https://img.shields.io/github/downloads/fif7y/melytics/total?color=2ea44f&cacheSeconds=1800" alt="Downloads"></a>
 </p>
 
 **Runs on the shared hosting you already have. Talks to your AI.**
