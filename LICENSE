@@ -1,0 +1,52 @@
+melytics License (free to use)
+
+Copyright (c) 2026 fif7y. All rights reserved.
+
+This license applies to melytics version 0.5.7 and later. Versions 0.5.6 and
+earlier were released under the GNU Affero General Public License v3.0, and
+copies of those versions stay under that license.
+
+1. What you may do
+
+   You may download melytics from its official releases and install and run
+   it, free of charge, for any purpose, including commercial use, on servers
+   you control or manage. You may use it to measure websites you own or
+   operate, including websites you operate for a client. You may edit the
+   files meant for configuration (such as .env and .htaccess) and keep
+   backups of your installation.
+
+2. What you may not do
+
+   a. Modify, adapt, translate or create derivative works of melytics, apart
+      from the configuration files mentioned above.
+   b. Redistribute, publish, sublicense, sell, rent or lend melytics or any
+      part of it. To share melytics, link to its official releases.
+   c. Offer melytics, or access to it, to third parties as a hosted or managed
+      service.
+   d. Remove or alter this license or any copyright notice.
+
+3. Third-party components
+
+   melytics bundles open-source components (for example in the vendor/
+   folder and the dashboard bundle). Each stays under its own license, and
+   nothing in this license limits your rights under those licenses.
+
+4. Updates
+
+   Updates you receive from the official releases are covered by this
+   license unless they come with different terms.
+
+5. Termination
+
+   Your rights under this license end automatically if you break its terms.
+   You must then stop using melytics and delete your copies.
+
+6. No warranty
+
+   MELYTICS IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+   AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+   FROM, OUT OF OR IN CONNECTION WITH MELYTICS OR THE USE OR OTHER DEALINGS IN
+   MELYTICS.
